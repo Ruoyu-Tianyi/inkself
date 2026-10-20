@@ -1,44 +1,56 @@
 ---
 name: personal-handwriting
-description: Manage a user's local English and numeric handwriting samples and saved style preferences, and coordinate faithful handwritten document generation when a validated glyph renderer is available. Use for creating, selecting, or updating personal handwriting profiles and rendering with an established profile; do not treat generic font randomization as learning the user's handwriting.
+description: Create a reusable personal English, digit and symbol handwriting profile from labeled sampling sheets; extract and review real glyphs, save preferences, check coverage and generate verified PDF/SVG documents. Use for personal handwriting capture, profile selection and handwritten document generation. Freeform photos can be archived as references but cannot alone produce a complete style.
 ---
 
 # Personal handwriting
 
-Keep the requested text, digits, symbols, and subscripts exact while using one coherent personal handwriting profile. Read [the profile contract](references/profile-contract.md) when creating or editing a profile.
+Run scripts relative to this skill directory. Requires Python 3.10+ and `python -m pip install -r requirements.txt`. Read [profile contract](references/profile-contract.md) for schemas and preference ranges. Use a store outside the installed skill, normally `<working-directory>/.local/profiles`.
 
-## Current capability
+## Capture a profile
 
-This version includes a working local profile manager. It does **not** yet contain image-to-glyph extraction, handwriting training, or a personal glyph renderer. You may save reference samples and preferences now. Do not claim a sample has become a usable personal font, or produce generic-font output described as an exact imitation.
-
-## Intake and profile management
-
-For a new profile, ask for a handwritten English/numeric sample and a transcription if it is not supplied. Save it locally with the script. If only a freeform image is available, describe it as a reference sample; request a labeled sampling sheet later if a renderer needs character coverage. No style-readiness status is implied by successful sample import.
-
-Use a storage directory outside the installed skill package, normally `<working-directory>/.local/profiles`, or a location chosen by the user. Do not put private data in a source repository or upload it without destination-specific authorization.
+1. Create a profile and sampling PDF. Default: three A4 pages with uppercase/lowercase English, digits, punctuation and math symbols; three variants each.
 
 ```sh
-python scripts/profile.py --store <store> create <id> --name "<display name>"
-python scripts/profile.py --store <store> add-sample <id> --file <sample.png> --kind freeform --transcript <transcript.txt>
+python scripts/profile.py --store <store> create <id> --name "<name>"
+python scripts/handwriting.py template --output <sampling.pdf>
+```
+
+2. Give the PDF and adjacent `.json` to the user. Ask them to print at actual size, write each labeled character naturally in each of its three boxes in dark ink, leave the gray guides and corner markers visible, keep strokes inside boxes, and scan/photograph every whole page. Do not imitate a font while sampling. Keep the matching manifest. English samples do not imply Chinese coverage.
+3. Extract the supplied scans (PNG/JPEG or PDF). The program corrects rotation and moderate perspective, decodes page IDs, archives source images, and emits a **draft**, contact sheets and rejection/coverage reports. Wrong pages, missing markers or unsupported scans fail explicitly.
+
+```sh
+python scripts/handwriting.py --store <store> extract <id> --manifest <sampling.json> --pages <page1.png> <page2.png> <page3.png>
+python scripts/handwriting.py --store <store> review <id>
+```
+
+4. Open **every** returned contact sheet. Check labels against visible glyph identity, dots, punctuation and digits, crop completeness and stray marks. Request corrected samples for bad glyphs. Only after actual inspection, run `review <id> --accept` to activate the draft. This is an inspection attestation, not a request to ask the user for redundant approval. Never accept an unseen library. Missing characters may remain, but rendering text using them will fail.
+5. Archive arbitrary freeform images only as references using `profile.py add-sample <id> --file <image> --kind freeform [--transcript <utf8.txt>]`. Do not label them trained/usable glyphs. No neural model training is performed.
+
+## Generate a document
+
+Use UTF-8 `.txt`, or structured JSON with `blocks` of `heading`/`paragraph`, each containing `text` or `runs`. Runs support `text` and one of `subscript: true` / `superscript: true`. Preserve requested numbers, signs and content exactly. Convert unsupported document formats to this explicit content first; no automatic DOCX/LaTeX parsing is provided.
+
+```sh
+python scripts/handwriting.py --store <store> coverage <id> --input <document.json>
+python scripts/handwriting.py --store <store> render <id> --input <document.json> --output <result.pdf> --seed 42
+python scripts/handwriting.py validate --report <result.report.json> --render-dir <inspection-directory>
+```
+
+Coverage must pass. No silent generic-font substitution. Letters, digits and symbols use the same reviewed library. Outputs include PDF, one embedded-image SVG per page and a provenance/content report. Existing output files are not overwritten. For an unfamiliar style, render a short separate input with `--preview`; inspect it before the full export. `--preview` marks the report and does not truncate input.
+
+Open every rendered page image. Check clipping, overlap, numeric ambiguity, subscripts and page breaks against the requested content. Automated checks verify hashes, glyph mapping, page bounds and visible ink, **not OCR identity, personal similarity or correctness of user labels**. Report these limits accurately. Fix errors and repeat affected checks before delivery.
+
+## Save preferences
+
+```sh
 python scripts/profile.py --store <store> update <id> --preferences <preferences.json>
 python scripts/profile.py --store <store> show <id>
 python scripts/profile.py --store <store> list
 ```
 
-Resolve `scripts/profile.py` relative to this skill. Return the selected profile ID, saved preferences and actual supported state, without exposing private sample contents unnecessarily. Updating preferences is not model training.
+Use `render --preferences <json>` for temporary overrides; it does not update the saved profile. Prefer small variations that retain coherent proportions across text and digits. Changing variation is layout tuning, not learning handwriting. Missing glyph policy must be `error`; annotated fallback is reserved and not implemented.
 
-## Future rendering handoff
+## Privacy and scope
 
-Only render in a personal style after confirming a compatible installed engine and trusted glyph coverage. Until then, explain the missing engine and finish any requested profile work that is possible. Never invent a successful engine run.
-
-When rendering becomes available:
-
-- Take the user's text or structured runs as content truth; preserve identity fields, calculations, signs and subscripts.
-- Check required characters first. Default to an explicit missing-glyph error, not silent font substitution. If the user accepts a fallback, disclose which characters are affected.
-- Use the same profile for prose, digits and mathematical symbols. Preferences can change measured layout variation; they cannot stand in for the user's missing glyphs.
-- Show a short fixed-seed preview before a large export when the user is choosing a new style. Continue with an already accepted profile without repeatedly asking.
-- Validate the visible output as well as text/mapping logs. Inspect every PDF page for clipping, overlap and numeric ambiguity. Do not use hidden text extraction alone as proof that visible generated handwriting is correct.
-
-## Boundaries
-
-Use samples supplied or authorized by the user. This workflow does not copy signatures or create authentication/identity attestations. Do not include personal samples, profile exports, homework or identity fields in code commits or public examples by default.
+Keep samples, transcripts, glyph libraries and document reports local; reports contain full document text. Do not commit/upload personal data by default. Use authorized samples, never claim signature/authentication functionality. The current engine reuses isolated real glyphs; natural word-level joining and reconstruction of unseen characters from a short freeform photo are outside this release.

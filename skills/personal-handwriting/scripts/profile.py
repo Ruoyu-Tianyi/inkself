@@ -52,15 +52,17 @@ def folder(store, identifier):
 
 def write_json(path, value):
     path = Path(path)
-    with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=path.parent, delete=False) as stream:
-        tmp = Path(stream.name)
-        json.dump(value, stream, ensure_ascii=False, indent=2, allow_nan=False)
-        stream.write('\n')
+    tmp = None
     try:
+        with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=path.parent, delete=False) as stream:
+            tmp = Path(stream.name)
+            json.dump(value, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            stream.write('\n')
         os.replace(tmp, path)
     finally:
-        if tmp.exists():
+        if tmp is not None and tmp.exists():
             tmp.unlink()
+
 
 def load(store, identifier):
     dest = folder(store, identifier)

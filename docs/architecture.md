@@ -1,66 +1,15 @@
-# 技术方案与边界
+# Architecture
 
-## 输入与输出
+`profile.py` (standard library) manages local profiles, validated preferences, deduplicated sample copies and transcripts. `handwriting.py` handles A4 templates, computer vision, reviewed glyph libraries, layout, PDF/SVG output and validation. The Skill orchestrates these deterministic commands and inspects images.
 
-输入：用户提供的 PNG/JPEG/PDF 手写样本及可选转录；待生成文本或包含上下标的结构化公式；可复用的字迹档案；本次生成的偏好覆盖。
+Pipeline: template + paired manifest → user-filled scans → page marker detection/orientation/tag decode → perspective and illumination correction → labeled-cell connected-component extraction → draft library/contact sheets → visual review → active library → input coverage → deterministic glyph layout → PDF/SVG + provenance → raster and human inspection.
 
-输出：PDF、可选 SVG、缺字清单和校验结果。原始文本始终是内容真值。样本归档成功、字形提取成功、生成结果通过校验是三种不同状态。
+A template has four square-ring markers; one has a larger opening to determine orientation. Binary header tags encode a manifest identifier and page number. Labels/guides are outside the inner writing region or too light to survive the ink threshold. Extracted transparent PNGs preserve disconnected dots/components. Empty cells, tiny marks and border-touching strokes are rejected. These checks cannot recognize miswritten characters, so contact-sheet review is mandatory.
 
-## 两条采样路线
+The renderer selects actual captured variants with a fixed PRNG seed. It scales text, digits and symbols consistently, applies restrained spacing/baseline/slant preferences, wraps and paginates, and positions structured subscripts/superscripts. Both SVG and PDF embed the same glyph bitmaps. No fallback computer font renders document content. Input letters are never inferred by a generative model.
 
-### 定位采样页：第一版主路线
+Validation verifies exact character-to-glyph trace, content/PDF hashes, page count, bounds and visible pixels in each glyph region. It does not perform independent OCR and does not establish glyph identity, similarity, authentic authorship or mathematical correctness. The AI must still view every contact sheet/output page.
 
-生成带页码、定位点和字符标签的采样页。建议每个英文字母、数字和数学符号写 3–5 次，再填写两段自由书写内容，获取字形变体和整行统计。这个次数是初始产品建议，实际需实验调整。
+Python 3.10+, Pillow, NumPy, OpenCV headless, ReportLab and pypdfium2. OS font discovery is used only for template/contact labels and synthetic test fixtures. Pass `template --label-font` when no supported label font is installed. Personal samples and outputs never need a cloud service.
 
-覆盖至少包括 A–Z、a–z、0–9、标点、加减乘除、等号、百分号、括号、货币符号，以及用户实际需要的希腊字母。不要要求收集不需要的字符。
-
-按定位点校正透视；按已知格位切分；保留真实笔画边界与透明背景；检测空格、误填和多字填入同一格。字形映射必须经用户或明确转录校验；OCR 只能辅助，不能把猜测标签静默写入可信字形库。
-
-每个 glyph 记录 Unicode、变体 ID、源图哈希、源区域、包围盒、基线、advance、可信状态。PDF 渲染器使用源字形的矢量或高分辨率图像。主文字与数字共享同一套测量尺度与墨迹处理。
-
-### 自由照片：参考与后续实验
-
-先保存图片及转录，检测清晰度、阴影、裁切和倾斜。英文连笔的字符边界往往不确定，因此不能仅靠切图生成可靠完整字体。建议引导用户补交缺字采样页；后续可研究词级检索或离线图像条件生成，不将其标成已实现能力。
-
-## Skill 可调用流程
-
-`intake → create/update profile → check coverage → render preview → validate → export`
-
-上述是目标流程；当前脚本只实现 `create/update profile` 和参考样本归档。Skill 入口必须读懂这一边界并明确报告，不在没有可用引擎时声称已经模仿用户笔迹。
-
-建议后续统一 CLI：
-
-```text
-profile create / add-sample / update / show / list   已实现
-template create                                  待实现
-sample inspect / align / extract                  待实现
-coverage check                                   待实现
-render preview / pdf                             待实现
-validate content / layout / similarity            待实现
-```
-
-## 档案与偏好分离
-
-档案存储证据和字形；偏好只控制在证据允许范围内的呈现。不要把“潦草 80%”当成学习风格的替代物。
-
-当前偏好字段：墨色、文字字号、行距比例、倾斜、基线上下变化、字形变体强度、字距变化、固定随机种子、缺字策略。所有数值带范围校验；真正渲染器尚未实现，因此当前保存的数值不代表已测量的个人书写统计。
-
-未来的变化应以“行的缓慢倾斜 + 词的尺度变化 + 字符有限扰动”建模，而非对所有字符完全独立抖动。已有多个真实变体时优先选真实变体。预览设固定 seed，保证用户调整一个偏好时可对比。
-
-缺字默认 `error`；只有用户明确接受时才允许 `annotated-fallback`，并在缺字报告里记录被替代的字符。不得静默混合字体。
-
-## 数学内容
-
-用 Unicode + 结构化 runs 保留数字、运算符、上下标与单位。先验证公式内容，再将字形贴到布局位置。字符级内容校验由源 runs、glyph 映射和渲染日志共同完成；OCR 回读作为辅助信号。上下标要保持相对基线，不能随机化到改变含义。
-
-生成神经笔迹的模型即使视觉上自然，也可能省略字符、连错数字。对公式和身份字段不能仅依赖生成模型或不可见文字层的匹配证明可见内容准确。
-
-## TypeScribe 可选适配器
-
-它要求时序轨迹与转录配对；静态照片无法唯一确定落笔顺序。若未来支持手写板/触控笔采样，保存 x/y/t/pen-up、坐标尺度和配对转录，可研究轨迹归一化与 priming；需要检验新用户风格是否在原模型分布内。
-
-不要直接将图像轮廓点当作真实笔画时序。当前上游还有字符集限制、旧 TensorFlow 依赖和生成准确率问题；隔离依赖、固定版本，不作为主路径强依赖。
-
-## 本地数据
-
-样本、转录、偏好与后续模型默认在用户本地。公开仓库只含代码、规范和用户明确允许公开的合成示例。个人样本的发布授权与创建代码仓库的授权不同。用户可删除档案、导出或迁移；后续如接云端服务，须先明确数据去向及是否保留。
+Version 1 deliberately uses isolated glyph capture. Freeform reference photos, natural ligatures, unsampled character inference and trajectory synthesis are separate research tracks. TypeScribe expects time-ordered pen strokes, so its existing priming API is not a direct static-photo style encoder. No upstream code/model is bundled.
