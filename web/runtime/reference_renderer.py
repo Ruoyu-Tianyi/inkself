@@ -28,6 +28,7 @@ def load_bank(path):
                 if image.width>2048 or image.height>256:raise ValueError('Reference image too large.')
                 if not np.any(np.array(image.convert('L'))<200):raise ValueError('Empty reference glyph.')
             if not math.isfinite(entry['baseline']) or abs(entry['baseline'])>256:raise ValueError('Invalid reference baseline.')
+    bank['_manifest_sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
     bank['_root']=root
     return bank
 

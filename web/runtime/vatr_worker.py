@@ -13,22 +13,26 @@ def run(request_path):
     request=json.loads(Path(request_path).read_text(encoding='utf-8'))
     root=Path(request['model']).resolve();output=Path(request['output']).resolve()
     os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1';os.environ['MPLBACKEND']='Agg'
-    try:
-        from .reference_renderer import load_bank,reference_token,calibrate_model_image
-    except ImportError:
-        from reference_renderer import load_bank,reference_token,calibrate_model_image
+    sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+    from web.runtime.reference_renderer import load_bank,reference_token,calibrate_model_image
     mode=request.get('render_mode','model')
-    if mode not in ('model','model-calibrated','reference'):raise ValueError('Unknown handwriting renderer.')
-    bank=load_bank(request['reference_bank']) if mode in ('model-calibrated','reference') else None
-    if mode=='reference':
+    if mode not in ('model','model-calibrated','reference','learned-habits'):raise ValueError('Unknown handwriting renderer.')
+    bank=load_bank(request['reference_bank']) if mode in ('model-calibrated','reference','learned-habits') else None
+    habit=None
+    if mode=='learned-habits':
+        from web.runtime.habit_model import load_habits,habit_token
+        habit=load_habits(request['habit_model'],bank)
+    if mode in ('reference','learned-habits'):
         result=[]
         for token in re.findall(r'\n|[^\s]+',request['text']):
             if token=='\n':result.append({'newline':True});continue
-            image,metadata=reference_token(bank,token)
+            image,metadata=habit_token(bank,habit,token,request['seed'],len(result)) if habit else reference_token(bank,token)
             name=f'word-{len(result):04}.png';image.save(output/name)
             result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
-        record={'model':{'name':'Reviewed reference words and glyphs','device':'cpu','mode':mode,
-                'limit':'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.'},
+        record={'model':{'name':'Sample-fitted handwriting habits' if habit else 'Reviewed reference words and glyphs','device':'cpu','mode':mode,
+                'limit':habit['limits'] if habit else 'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.',
+                'habit_training_words':len(habit['training_words']) if habit else None,
+                'habit_model_sha256':__import__('hashlib').sha256(Path(request['habit_model']).read_bytes()).hexdigest() if habit else None},
                 'duration_seconds':round(time.monotonic()-started,2),'words':result,
                 'validation':'Reviewed sample label mapping; owner similarity review still required.'}
         (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')

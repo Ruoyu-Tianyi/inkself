@@ -171,7 +171,7 @@ class Generation(BaseModel):
     line_spacing:float=Field(default=1.6,ge=1.2,le=2.2)
     ink:str=Field(default='#263d57',pattern=r'^#[0-9a-fA-F]{6}$')
     seed:int=Field(default=42,ge=0,le=2147483647)
-    render_mode:Literal['model','model-calibrated','reference']='model'
+    render_mode:Literal['model','model-calibrated','reference','learned-habits']='model'
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -190,10 +190,18 @@ def generate(body:Generation):
             bank=load_bank(bank_path)
             if bank.get('source_sha256')!=profile['sample_sha256']:raise ValueError('原稿来源不匹配。')
         except (ValueError,OSError,KeyError) as error:raise HTTPException(409,str(error))
-    missing=missing_characters(bank,text) if body.render_mode=='reference' else sorted(set(text)-ALPHABET-{'\n'})
+    habit_path=None
+    if body.render_mode=='learned-habits':
+        from .runtime.habit_model import load_habits
+        if not profile.get('habit_model'):raise HTTPException(409,'此档案还没有拟合并检查过的习惯适配器。')
+        habit_path=(folder/profile['habit_model']).resolve()
+        if not habit_path.is_relative_to(folder.resolve()):raise HTTPException(409,'习惯适配器路径无效。')
+        try:load_habits(habit_path,bank)
+        except (ValueError,OSError,KeyError,TypeError) as error:raise HTTPException(409,str(error))
+    missing=missing_characters(bank,text) if body.render_mode in ('reference','learned-habits') else sorted(set(text)-ALPHABET-{'\n'})
     if missing:raise HTTPException(422,'当前生成方式不支持这些字符：'+''.join(missing))
     if any(len(word)>32 for word in text.split()):raise HTTPException(422,'单个连续词不能超过 32 个字符，请增加空格。')
-    if body.render_mode!='reference' and not model_status()['ready']:raise HTTPException(503,'生成模型尚未安装完成，请稍后再试。')
+    if body.render_mode not in ('reference','learned-habits') and not model_status()['ready']:raise HTTPException(503,'生成模型尚未安装完成，请稍后再试。')
     with LOCK:
         folder=profile_path(body.profile_id);profile=read(folder/'profile.json')
         if profile['status']!='ready':raise HTTPException(409,'请先检查并确认采样图片。')
@@ -209,6 +217,7 @@ def generate(body:Generation):
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
                  'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode}
         if bank_path:request['reference_bank']=str(bank_path)
+        if habit_path:request['habit_model']=str(habit_path)
         write(dest/'request.json',request)
         profile['preferences']=body.model_dump(exclude={'profile_id','text'})
         write(folder/'profile.json',profile)
