@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'skills/personal-handwriting/scripts/profile.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'engines/glyphs/scripts/profile.py'
 spec = importlib.util.spec_from_file_location('profile_cli', SCRIPT)
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)

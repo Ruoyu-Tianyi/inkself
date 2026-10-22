@@ -1,15 +1,33 @@
-# Architecture
+# Inkself 技术结构
 
-`profile.py` (standard library) manages local profiles, validated preferences, deduplicated sample copies and transcripts. `handwriting.py` handles A4 templates, computer vision, reviewed glyph libraries, layout, PDF/SVG output and validation. The Skill orchestrates these deterministic commands and inspects images.
+Inkself 是少样本个人字迹网页应用，当前在本机以单用户服务运行。公开源代码不等于已经提供公开在线服务。
 
-Pipeline: template + paired manifest → user-filled scans → page marker detection/orientation/tag decode → perspective and illumination correction → labeled-cell connected-component extraction → draft library/contact sheets → visual review → active library → input coverage → deterministic glyph layout → PDF/SVG + provenance → raster and human inspection.
+## 网页主流程
 
-A template has four square-ring markers; one has a larger opening to determine orientation. Binary header tags encode a manifest identifier and page number. Labels/guides are outside the inner writing region or too light to survive the ink threshold. Extracted transparent PNGs preserve disconnected dots/components. Empty cells, tiny marks and border-touching strokes are rejected. These checks cannot recognize miswritten characters, so contact-sheet review is mandatory.
+`web/static/` 提供采样、上传、试写、作品和评价页面。FastAPI 服务 `web/app.py` 管理本地档案、队列、下载与反馈。`launch.py` 在检查服务状态后启动 loopback 服务，Windows 入口为 `Start Inkself.cmd`。
 
-The renderer selects actual captured variants with a fixed PRNG seed. It scales text, digits and symbols consistently, applies restrained spacing/baseline/slant preferences, wraps and paginates, and positions structured subscripts/superscripts. Both SVG and PDF embed the same glyph bitmaps. No fallback computer font renders document content. Input letters are never inferred by a generative model.
+流程：指定短文 → 自然书写图片 → EXIF 方向修正、背景归一化及适度倾斜校正 → 文字行切分 → 人工选择 → 档案与模型风格编码 → 新词图生成 → A4 排版及 PDF → 内容与相似度人工评价。
 
-Validation verifies exact character-to-glyph trace, content/PDF hashes, page count, bounds and visible pixels in each glyph region. It does not perform independent OCR and does not establish glyph identity, similarity, authentic authorship or mathematical correctness. The AI must still view every contact sheet/output page.
+`web/samples.py` 不把切行成功当作 OCR、转录匹配或相似度验收通过。严重透视、多栏、竖排及弯曲纸页不属于已验证条件。
 
-Python 3.10+, Pillow, NumPy, OpenCV headless, ReportLab and pypdfium2. OS font discovery is used only for template/contact labels and synthetic test fixtures. Pass `template --label-font` when no supported label font is installed. Personal samples and outputs never need a cloud service.
+## 少样本生成
 
-Version 1 deliberately uses isolated glyph capture. Freeform reference photos, natural ligatures, unsampled character inference and trajectory synthesis are separate research tracks. TypeScribe expects time-ordered pen strokes, so its existing priming API is not a direct static-photo style encoder. No upstream code/model is bundled.
+`web/runtime/vatr_worker.py` 在独立进程运行固定版本 VATr++ 生成器。参考文字行被缩放并切为图块，编码器计算风格表示，生成器按指定新内容输出整词图像。编码可缓存复用，不对每个用户进行模型训练。
+
+仅初始化并严格加载预训练生成器，不初始化训练判别器、OCR、评价网络和优化器。推理离线；字符原型及权重来自安装脚本固定的模型版本，资产不放入 Git。
+
+按词排版为 A4 图片与 PDF，保留显式换行，以普通词距呈现多个空格；支持字号、行距、墨色和种子。它不是段落级连续笔画模型。报告记录输入与来源，但尚无独立 OCR 自动核对，结果默认待人工评价。
+
+## 存储与服务边界
+
+档案、原图、文字行、风格缓存、任务、PDF、日志和反馈位于 `.local/web-data/`，可通过 `INKSELF_DATA` 调整。不需要把样本发往云端。
+
+服务仅监听 `127.0.0.1`，包含 Host、同源令牌、上传限制、下载白名单和排队上限。它没有远程多用户认证和租户隔离，不能直接开放监听地址当作正式在线产品。云端仍需认证、私有存储、持久队列及独立推理部署。
+
+## 辅助字形引擎
+
+`engines/glyphs/` 保留逐字定位采样、切分、联系表审核和真实字形复用，只能渲染已经采样的字符。其确定性 PDF/SVG 可检查字符映射、哈希、页界和可见墨迹。
+
+该引擎与网页生成模型是独立流程。其上下标、数学符号及确定性映射能力不能直接宣称为网页模型的能力；其测试也不能证明网页真人相似度或生成文字准确性通过。
+
+进度见 [产品路线](roadmap.md)，操作见 [使用指南](web-guide.md)。

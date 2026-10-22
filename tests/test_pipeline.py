@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'skills/personal-handwriting/scripts/handwriting.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'engines/glyphs/scripts/handwriting.py'
 spec = importlib.util.spec_from_file_location('personal_engine', SCRIPT)
 e = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(e)

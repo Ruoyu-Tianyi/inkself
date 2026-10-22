@@ -1,11 +1,29 @@
-# Release 1.0 acceptance
+# Inkself 产品路线与验证状态
 
-Implemented: profile/sample/preference management; printable labeled templates; image/PDF correction and extraction; versioned drafts, contact sheets and explicit review; coverage gate; deterministic personal-glyph PDF/SVG with sub/superscripts; provenance and visible-ink validation; self-contained AI Skill, dependency list, packaging tool and examples.
+目标：普通用户自然抄写一段指定英文与数字，上传后保存个人字迹风格，再输入新内容生成手写文档。当前主产品是网页，处于本机单用户内测与真人验收阶段。
 
-Local automated acceptance: 18 unittest cases pass on Windows, Python 3.12.14 bundled runtime. They cover profile validation, sample deduplication, no side effects for invalid transcripts, extraction with full default character set, ring-shaped-letter localization regression, blank/missing cells, wrong manifests, 90-degree orientation with perspective/shadow, review gating, absent glyphs, deterministic output, temporary preferences, tamper detection, multipage layout invalid document structures, extreme slant wrapping and preventing preview from bypassing review.
+## 已实现
 
-A complete default three-page computer-filled synthetic sheet was extracted, reviewed as a known fixture, rendered to a one-page English/numeric/math document and raster-validated. The demo output and all three blank template pages were visually inspected. This confirms the controlled workflow, not real handwriting similarity. CI declares Linux/Python 3.10 and 3.12; remote results must be checked separately before claiming that matrix passed.
+- 固定采样内容、图像上传、质量提示、文字行切分与人工确认。
+- 本地多档案、风格缓存、字号/行距/墨色偏好、队列和刷新后查看任务。
+- VATr++ 预训练生成器的真实离线 CPU 推理，生成新词和数字。
+- 原图对照、A4 预览、PDF、历史作品与真人评价。
+- 独立逐字采样引擎，保留作辅助与对照，不与网页模型混同。
 
-Real-owner acceptance remains data-dependent: have the owner fill the sampling sheets naturally, capture every page, inspect all extracted glyph contact sheets, compare an unfamiliar generated passage with a genuinely handwritten passage, then tune preferences and save the accepted profile. Do not claim this step passed without those samples.
+## 验证及限制
 
-Future experiments (outside 1.0): freeform word alignment, captured ligatures, contextual joining and a static-image-conditioned generative adapter. Any generative route must still preserve document text/numbers and pass visible review before adoption. No promise of exact reconstruction from an arbitrary short photo.
+28 项本地 unittest 通过，覆盖网页与辅助引擎的接口、审核门禁、上传失败、偏好持久化、重启中断、浅色墨迹保护、排版与原有字形流程。
+
+合成参考样本已通过实际模型推理及缓存复用检查；网页已试跑上传、确认、生成、预览和 PDF，检查过桌面/手机布局及 PDF 页面。扩展生成中百分号和加号形状不够清晰。
+
+**真人测试正在进行，尚无相似度或全面内容准确性通过结论。** 尚未接入独立 OCR，不以任务成功、日志或下载替代可见内容核对。CI 配置包含 Linux/Python 3.10 和 3.12，远程矩阵结果须单独核实。
+
+## 后续工作
+
+1. 收集授权真人样本与未见测试内容，分别记录相似度、自然程度、数字和字符错误，固定验收集。
+2. 在同一测试集比较候选生成模型，决定保留、替换或适配当前模型；目前未宣称 VATr++ 是最优方案。
+3. 接入独立识字核对、错误重试与质量门槛，优先处理数字和符号。
+4. 完成远程认证、私有存储、持久队列、配额与成本记录，再做云端多用户内测。
+5. 核实模型、代码和训练数据的使用条件，达到验收门槛后再正式发布。
+
+中文、复杂公式、上下标和完整段落级连续生成需要分别扩展与验证。当前没有公共线上服务，也不宣称最终产品目标已经完成。

@@ -1,11 +1,8 @@
----
-name: personal-handwriting
-description: Create a reusable personal English, digit and symbol handwriting profile from labeled sampling sheets; extract and review real glyphs, save preferences, check coverage and generate verified PDF/SVG documents. Use for personal handwriting capture, profile selection and handwritten document generation. Freeform photos can be archived as references but cannot alone produce a complete style.
----
+# Inkself auxiliary glyph workflow
 
-# Personal handwriting
+This is the independent character-sampling utility, not the web app's few-shot generation workflow. For the main product, see [the web guide](https://github.com/Ruoyu-Tianyi/inkself/blob/main/docs/web-guide.md).
 
-Run scripts relative to this skill directory. Requires Python 3.10+ and `python -m pip install -r requirements.txt`. Read [profile contract](references/profile-contract.md) for schemas and preference ranges. Use a store outside the installed skill, normally `<working-directory>/.local/profiles`.
+Run scripts relative to this engine directory. Requires Python 3.10+ and `python -m pip install -r requirements.txt`. Read [profile contract](references/profile-contract.md) for schemas and preference ranges. Use a store outside the engine directory, normally `<working-directory>/.local/profiles`.
 
 ## Capture a profile
 
@@ -24,7 +21,7 @@ python scripts/handwriting.py --store <store> extract <id> --manifest <sampling.
 python scripts/handwriting.py --store <store> review <id>
 ```
 
-4. Open **every** returned contact sheet. Check labels against visible glyph identity, dots, punctuation and digits, crop completeness and stray marks. Request corrected samples for bad glyphs. Only after actual inspection, run `review <id> --accept` to activate the draft. This is an inspection attestation, not a request to ask the user for redundant approval. Never accept an unseen library. Missing characters may remain, but rendering text using them will fail.
+4. Open **every** returned contact sheet. Check labels against visible glyph identity, dots, punctuation and digits, crop completeness and stray marks. Request corrected samples for bad glyphs. Only after actual inspection, run `review <id> --accept` to activate the draft. This is an inspection attestation, an assertion that the glyphs were actually inspected. Never accept an unseen library. Missing characters may remain, but rendering text using them will fail.
 5. Archive arbitrary freeform images only as references using `profile.py add-sample <id> --file <image> --kind freeform [--transcript <utf8.txt>]`. Do not label them trained/usable glyphs. No neural model training is performed.
 
 ## Generate a document
@@ -53,4 +50,4 @@ Use `render --preferences <json>` for temporary overrides; it does not update th
 
 ## Privacy and scope
 
-Keep samples, transcripts, glyph libraries and document reports local; reports contain full document text. Do not commit/upload personal data by default. Use authorized samples, never claim signature/authentication functionality. The current engine reuses isolated real glyphs; natural word-level joining and reconstruction of unseen characters from a short freeform photo are outside this release.
+Keep samples, transcripts, glyph libraries and document reports local; reports contain full document text. Do not commit/upload personal data by default. Use authorized samples, never claim signature/authentication functionality. This auxiliary engine reuses isolated real glyphs; natural word-level joining and reconstruction of unseen characters from a short freeform photo are outside this release.

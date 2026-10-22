@@ -1,4 +1,6 @@
-# Profile and document contract
+# Inkself auxiliary glyph-engine contract
+
+This contract applies only to the independent glyph engine, not the web app's sample-conditioned generation API.
 
 Profile ID: 1–64 lowercase ASCII letters/digits, interior hyphens allowed. Storage `<store>/<id>/profile.json`, schema_version 1. Creation starts `reference-only`; reviewed usable library sets `glyph-ready`. Sample import alone never changes readiness.
 

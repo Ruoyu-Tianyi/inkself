@@ -1,79 +1,71 @@
-# Inkself · 网页字迹实验室
+# Inkself
 
-**主产品已转向网页。** 当前提供可运行的本地单用户内测：自然段采样 → 上传检查 → 保存字迹 → VATr++ 生成新内容 → 预览与 PDF → 真人评价。
+Few-shot handwriting imitation from a short reference sample, with a local web studio for capture, generation, review and PDF export.
 
-这台电脑双击 **Start Inkself.cmd** 启动，打开 `http://127.0.0.1:8765`。首次安装及详细操作见 [网页使用指南](docs/web-guide.md)，研发状态见 [网页路线](docs/web-roadmap.md)。真实少样本生成器已接入；本人相似度及文字准确性待真人验收。没有部署到公共云端。
+通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页内测版，真人验收进行中，尚未达到正式发布的质量门槛。**
 
-下方保留 v1 字形复用 Skill 的独立用法；它与网页的生成模型是两种不同引擎，不要混同其能力和验证结论。
+## 当前能力
 
----
+- 指定采样内容、PNG/JPEG/WebP 上传、文字行切分和人工确认。
+- 多字迹档案、个人风格缓存及字号、行距、墨色偏好。
+- 固定版本 VATr++ 预训练生成器的真实离线 CPU 推理，可生成样本之外的新词句及数字。
+- 原图对照、A4 预览、PDF 下载、历史作品和人工评价。
 
-# Personal Handwriting Skill 1.0
+当前按词生成与排版，不是完整段落级连续笔画。它不使用通用字体替换，也不要求逐字采集所有字符。
 
-供 AI 调用的本地个人字迹工具：采样、保存个人字形与偏好、检查缺字、生成 PDF/SVG，并校验输出内容和可见笔迹。Python 3.10+，Windows/Linux/macOS；当前已在 Windows 本地验证。
+## 快速开始
 
-第一版采用真实字形复用：从定位采样页中提取用户写出的字母、数字和符号，统一用于文档。它不是从任意一段照片训练通用字迹模型；自然连笔与未采样字符的生成仍需后续模型研究。**本仓库测试使用合成样本，个人相似度必须用真实用户样本另行验收。**
+Windows，Python **3.10–3.12**：
 
-## 安装
+```powershell
+git clone https://github.com/Ruoyu-Tianyi/inkself.git
+cd inkself
+./setup-web.ps1
+```
+
+安装后双击 **Start Inkself.cmd**，打开 `http://127.0.0.1:8765`。已安装的电脑无需重复安装。模型和依赖下载需要网络及额外磁盘空间；遵循本机 PowerShell 执行策略，不需要关闭全局保护。
+
+1. 自然抄写网页提供的英文与数字，拍照上传。
+2. 检查文字行，排除印刷文字、杂物和切分错误。
+3. 输入新内容，生成试写，对照原图逐字检查。
+4. 下载 PDF，评价内容准确性、字迹相似度与自然程度。
+
+详细安装、停止服务和排错见 [使用指南](docs/web-guide.md)。
+
+## 验证状态与边界
+
+| 项目 | 状态 |
+| --- | --- |
+| 本地自动测试 | 28 项通过，覆盖网页与辅助字形引擎 |
+| 真实模型推理 | 已用合成参考样本运行，并验证风格缓存复用 |
+| 网页流程 | 已试跑上传、确认、生成、预览和 PDF；检查过桌面/手机宽度布局 |
+| 本人相似度与真人泛化 | **验收进行中，尚无通过结论** |
+| 全面内容准确性 | **未通过验收；百分号、加号在合成测试中存在不清晰情况** |
+| 独立 OCR 与自动纠错 | 尚未接入，输出默认待人工核对 |
+| 远程多用户服务 | 尚未部署，本机服务不应直接暴露到公网 |
+
+当前支持英文大小写、数字和模型字母表内的部分标点。暂不支持中文、等号、美元符号、复杂公式和上下标。生成成功、内容日志或下载成功不能证明文字写对了，也不能证明字迹像本人。
+
+## 开发与结构
 
 ```sh
-python -m pip install -r requirements.txt
+# 在项目 Python 环境中运行
 python -m unittest discover -s tests -v
+node --check web/static/app.js
+python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 ```
 
-将 `skills/personal-handwriting` 完整目录复制到 AI 工具支持的技能目录（Codex 为 `~/.codex/skills/personal-handwriting`），在同一个 Python 环境安装该目录内的 `requirements.txt`。也可解压本地 `dist/personal-handwriting.zip`。档案应保存在技能目录外，升级技能不会改变档案。
+- `web/`：网页、本地 API、样本处理和 VATr++ 推理适配器。
+- `scripts/setup_model.py`：固定版本模型资产下载与大文件哈希检查。
+- `engines/glyphs/`：逐字采样和确定性字形复用工具，用作辅助及对照，不属于网页的少样本生成模型。
+- `tests/`：合成样本及接口测试，不代表真人相似度通过。
 
-## 使用
+参见 [技术结构](docs/architecture.md)、[产品路线](docs/roadmap.md) 和 [辅助字形工作流](engines/glyphs/workflow.md)。
 
-在仓库根目录运行；AI 安装后读取 [SKILL.md](skills/personal-handwriting/SKILL.md) 即可按需调用。
+## 模型、数据与隐私
 
-```sh
-python skills/personal-handwriting/scripts/profile.py --store .local/profiles create my-hand --name "My handwriting"
-python skills/personal-handwriting/scripts/handwriting.py template --output outputs/sampling.pdf
-```
+网页使用 [VATr++](https://huggingface.co/blowing-up-groundhogs/vatrpp) 固定版本生成器；来源、许可与适配方式见 [第三方模型说明](docs/model-notice.md)。权重及下载的上游代码保存在忽略的 `.local/`，未随本仓库重新分发。
 
-按采样 PDF 标签，在每个框内写对应字符，每字三个自然变体。使用深色笔、保留四角定位标记和整页边缘，扫描或拍照所有页。保存配套的 `sampling.json`，不要混用其他批次的采样页。
+样本、转录、风格缓存、文档及包含完整输入的报告默认只保存在本机，已排除 Git 跟踪。仅使用本人或经授权的样本，不提供签名或身份认证功能。
 
-```sh
-python skills/personal-handwriting/scripts/handwriting.py --store .local/profiles extract my-hand --manifest outputs/sampling.json --pages scan1.png scan2.png scan3.png
-python skills/personal-handwriting/scripts/handwriting.py --store .local/profiles review my-hand
-```
-
-打开返回的**全部** contact 图片，核对字符标签、笔画和切分。确认实际检查无误后执行：
-
-```sh
-python skills/personal-handwriting/scripts/handwriting.py --store .local/profiles review my-hand --accept
-python skills/personal-handwriting/scripts/handwriting.py --store .local/profiles coverage my-hand --input examples/document.json
-python skills/personal-handwriting/scripts/handwriting.py --store .local/profiles render my-hand --input examples/document.json --output outputs/result.pdf --seed 42
-python skills/personal-handwriting/scripts/handwriting.py validate --report outputs/result.report.json --render-dir outputs/inspection
-```
-
-`coverage` 返回缺失字符时先补采。渲染输出 PDF、逐页 SVG 和含字形来源的报告；打开 inspection 中全部页图进行版式及数字核对。文件已存在时换新输出名。CLI 成功退出码 0，缺字 3，其他错误 2；JSON 输出便于 AI 解析。
-
-## 已实现
-
-- 本地多档案、样本 SHA-256 去重、转录归档、偏好持久化及临时覆盖。
-- 三页默认英文/数字/符号采样 PDF，可指定字符集与每字 1–5 个变体。
-- PNG/JPEG/PDF 导入、旋转和适度透视/光照校正、页码识别、字形提取、空白/边界拒绝、逐页联系表检查。
-- 草稿审核后启用，缺字阻断，文字与数字共用个人字形，固定种子可复现。
-- 自动换行分页、标题、上下标，PDF/SVG、内容映射与哈希校验、逐字可见墨迹检查。
-- 测试覆盖错误采样页、空白、缺字、旋转/透视/阴影、多页、上下标、文件被改动和复现性。
-
-自动校验不能证明用户是否把字写进正确的框，也不能证明与本人字迹相似。无隐藏文字层作为正确性凭据。单字拼排会保留字形，但还原不了自然连笔；不支持签名或身份认证。自由手写照片可归档，暂不自动转成完整字形库。
-
-## 偏好与隐私
-
-偏好见 [字段说明](skills/personal-handwriting/references/profile-contract.md)，可使用 `profile.py update` 保存或 `render --preferences` 临时覆盖。[示例文档](examples/document.json) 展示结构化上下标输入。
-
-样本、字形、转录、文档及报告默认只留本地，`.local/`、`outputs/` 等已被 Git 忽略。**报告包含完整输入内容**，分享时一并考虑隐私。仓库不包含个人样本或作业信息。
-
-## 重现与工程说明
-
-```sh
-python examples/synthetic_demo.py --output .local/demo
-python scripts/package_skill.py --output dist/personal-handwriting.zip
-```
-
-演示用计算机字体填采样页，再提取和渲染，只验证技术流程，不代表个人手写效果。技术结构、已验收与实验边界见 [架构](docs/architecture.md)、[验收记录](docs/roadmap.md)。
-
-灵感来自 [TypeScribe](https://github.com/rudyoactiv/typescribe-handwriting)（检查版本 `ccae8180a614edfcca5526d80bd8ae6904c7f77b`）。其 priming 需要配对的字符和笔迹轨迹，不能直接将任意静态照片转换成个人风格。本项目独立实现，未复制上游代码、模型权重或训练数据。
+早期实验受 [TypeScribe](https://github.com/rudyoactiv/typescribe-handwriting) 启发；当前网页的静态图片风格生成使用 VATr++，不是 TypeScribe 的笔迹轨迹 priming 接口。

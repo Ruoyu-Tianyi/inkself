@@ -109,10 +109,10 @@ def make_template(output, manifest=None, characters=DEFAULT_CHARS, variants=3, l
     os.close(fd)
     try:
         c = canvas.Canvas(temp, pagesize=A4)
-        c.setTitle('Personal handwriting sampling sheet')
+        c.setTitle('Inkself glyph sampling sheet')
         for page in pages:
             c.setFont('SampleLabels', 14)
-            c.drawString(43, height - 63, 'Personal handwriting sample')
+            c.drawString(43, height - 63, 'Inkself glyph samples')
             c.setFont('SampleLabels', 8)
             for k, text in enumerate([
                 f"Sheet {page['page']} / {len(pages)}    Template {identifier}",
@@ -592,13 +592,13 @@ def render(store, identifier, input_path, output, svg_dir=None, seed=None, overr
     output.parent.mkdir(parents=True, exist_ok=True)
     svg_dir.mkdir(parents=True, exist_ok=False)
     c = canvas.Canvas(str(output), pagesize=A4, invariant=1, pageCompression=1)
-    c.setTitle('Personal handwriting document')
+    c.setTitle('Inkself glyph document')
     svg_files = []
     for page in range(1, pages + 1):
         svg = ET.Element('svg', {'xmlns': 'http://www.w3.org/2000/svg',
                                 'width': f'{A4[0]}pt', 'height': f'{A4[1]}pt',
                                 'viewBox': f'0 0 {A4[0]} {A4[1]}'})
-        ET.SubElement(svg, 'title').text = 'Personal handwriting document'
+        ET.SubElement(svg, 'title').text = 'Inkself glyph document'
         ET.SubElement(svg, 'rect', {'width': str(A4[0]), 'height': str(A4[1]), 'fill': 'white'})
         for item in (i for i in items if i['page'] == page):
             image, data = image_cache[item['glyph']['file']]

@@ -1,1 +1,1 @@
--r skills/personal-handwriting/requirements.txt
+-r engines/glyphs/requirements.txt
