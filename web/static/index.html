@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2eb"><title>Inkself · 留住你的字迹</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+<a class="brand" href="#capture"><span class="brand-mark">i.</span><span>inkself<small>个人字迹实验室</small></span></a>
+<div class="sidebar-label">你的工作室</div>
+<nav aria-label="主导航"><button class="nav active" data-view="capture"><span>01</span>采集字迹</button><button class="nav" data-view="compose"><span>02</span>写下新内容</button><button class="nav" data-view="library"><span>03</span>字迹与作品</button></nav>
+<div class="side-note"><span class="status-dot"></span><strong>本地实验版</strong><p>你的样本与作品<br>保存在这台电脑。</p><button id="model-info" class="text-button">查看运行状态 ↗</button></div>
+<div class="sidebar-footer">A little more you.<span>ENGLISH & NUMBERS / 0.2</span></div>
+</aside>
+<main>
+<header class="topbar"><span id="breadcrumb">工作室 / 采集字迹</span><span class="model-chip" id="model-chip">正在连接服务…</span></header>
+<div id="notice" role="status" aria-live="polite" hidden></div>
+<section class="view" id="capture">
+<div class="page-heading"><p class="eyebrow">YOUR WORDS. YOUR HAND.</p><h1>从一段笔迹，<br>开始认识你的书写。</h1><p>自然地抄写下面的内容，拍照上传。让新的文字，带上你的习惯。</p></div>
+<div class="workspace capture-grid">
+<div class="capture-instructions">
+<div class="section-caption"><span class="number">1</span><h2>写下这一段</h2><a href="/api/prompt.pdf" class="small-link" download>下载采样纸 ↓</a></div>
+<div class="prompt-paper"><span class="paper-label">COPY IN YOUR NATURAL HANDWRITING</span><div id="prompt-lines"></div><span class="paper-foot">大小写 · 数字 · 常用标点</span></div>
+<div class="writing-tips"><p><b>不必刻意工整。</b>保留平时的连笔、字距和倾斜。</p><p>深色笔，浅色纸，每句话一行。只拍你写的内容，避免反光、阴影和印刷文字。</p></div>
+</div>
+<div class="upload-panel">
+<div class="section-caption"><span class="number">2</span><h2>上传你的笔迹</h2></div>
+<form id="upload-form"><label class="field-label" for="profile-name">给这份字迹起个名字</label><input id="profile-name" name="name" maxlength="60" placeholder="例如：我的日常字迹" required autocomplete="off">
+<label class="drop-zone" id="drop-zone" for="sample-file"><span class="upload-glyph" aria-hidden="true">↥</span><strong id="file-label">选择或拖入一张照片</strong><span>JPG、PNG、WebP · 最大 20 MB</span><img id="upload-preview" alt="待上传的字迹样本" hidden><input id="sample-file" name="file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+<p class="muted">请上传清晰的横向文字，保留完整笔画和行间距。</p><button class="primary full" id="upload-button" type="submit">提取我的字迹 <span>→</span></button></form>
+<div class="honest-note"><span>实验版说明</span><p>当前使用少样本生成模型。字迹相似度与文字、数字准确性需要核对；不会将通用字体当成你的字迹。</p></div>
+</div>
+</div>
+<div id="sample-review" class="review-panel" hidden><div class="section-caption"><span class="number">3</span><h2>检查识别出的文字行</h2></div><p class="muted">保留清晰、完整的手写文字行。取消选择印刷文字、空白或切分错误的区域；这一步检查图片，不代表模型已经学会你的字迹。</p><div id="sample-warnings"></div><div id="line-grid"></div><label class="check-row"><input type="checkbox" id="review-check">我已检查，所选区域都是我希望使用的完整手写文字行。</label><button class="primary" id="accept-sample">保存字迹，去试写 →</button></div>
+</section>
+<section class="view" id="compose" hidden>
+<div class="page-heading compact"><p class="eyebrow">SOMETHING ONLY YOU WOULD WRITE.</p><h1>新的内容，熟悉的笔迹。</h1><p>先试写一小段。对照原始样本，看看它是否像你。</p></div>
+<div class="compose-grid"><div class="compose-controls"><form id="generate-form"><label class="field-label" for="profile-select">使用哪份字迹</label><select id="profile-select" required><option value="">先采集并确认一份字迹</option></select><div id="selected-sample" hidden><span class="field-label">原始样本</span><img id="reference-image" alt="所选个人字迹的原始样本"></div><div class="label-row"><label class="field-label" for="content">写下新内容</label><span id="char-count">0 / 3000</span></div><textarea id="content" maxlength="3000" rows="8" required placeholder="输入一段没有在样本中出现过的英文或数字…">A new day, a fresh page. I have 27 ideas and 365 chances to begin.</textarea><p class="muted">支持英文、数字和模型内的常用标点。暂不支持中文、复杂公式及上下标；数字与符号请特别核对。</p><div class="settings-row"><label>字号 <output id="size-value">16</output><input id="size" type="range" min="10" max="26" value="16"></label><label>行距<select id="line-spacing"><option value="1.4">紧凑</option><option value="1.6" selected>自然</option><option value="2">宽松</option></select></label><label>墨色<input id="ink" type="color" value="#263d57" aria-label="墨色"></label></div><button class="primary full" id="generate-button" type="submit">生成试写 <span>→</span></button></form><p class="muted" id="generation-note">CPU 生成可能需要几分钟。你可以离开页面，任务会在本地继续。</p></div>
+<div class="preview-panel"><div class="preview-toolbar"><span>纸上预览</span><span id="page-count">A4</span></div><div id="empty-preview"><span class="paper-symbol">Aa</span><h3>下一页，写什么？</h3><p>选择字迹，输入内容，<br>你的试写会出现在这里。</p></div><div id="job-progress" hidden><span class="loader"></span><strong id="progress-title">正在生成</strong><p id="progress-message"></p></div><div id="output-pages" hidden></div><div id="download-bar" hidden><span id="verification-label">待人工核对</span><a id="download-pdf" class="primary" download>下载 PDF ↓</a></div></div></div>
+<div id="feedback-panel" class="review-panel" hidden><div class="section-caption"><span class="number">✓</span><h2>这份试写，像你吗？</h2></div><p class="muted">请对照原始样本，逐字检查新内容，尤其是数字。评价只保存在本机。</p><form id="feedback-form"><div class="feedback-grid"><label>文字与数字<select id="text-verdict" required><option value="">请选择核对结果</option><option value="correct">已核对，全部正确</option><option value="errors">已核对，存在错误</option></select></label><label>字迹相似度<select id="similarity" required><option value="">请选择</option><option value="1">1 · 不像</option><option value="2">2 · 略有相似</option><option value="3">3 · 有些像</option><option value="4">4 · 比较像</option><option value="5">5 · 很像</option></select></label><label>自然程度<select id="naturalness" required><option value="">请选择</option><option value="1">1 · 很机械</option><option value="2">2 · 比较生硬</option><option value="3">3 · 一般</option><option value="4">4 · 比较自然</option><option value="5">5 · 很自然</option></select></label></div><textarea id="feedback-notes" rows="2" maxlength="2000" placeholder="哪里不像？有哪些字或数字写错了？"></textarea><button type="submit" class="secondary">保存这次评价</button></form></div>
+</section>
+<section class="view" id="library" hidden><div class="page-heading compact"><p class="eyebrow">A SMALL COLLECTION OF YOU.</p><h1>留住每一种书写。</h1><p>字迹样本、试写作品，以及你的每次评价。</p></div><div class="section-caption"><h2>我的字迹</h2><button class="small-link" data-goto="capture">＋ 新建字迹</button></div><div id="profile-list"></div><div class="section-caption collection-heading"><h2>试写作品</h2><button class="small-link" id="refresh-library">刷新 ↻</button></div><div id="job-list"></div></section>
+<footer>Inkself · 少样本字迹生成实验室 <span>先保留真实，再慢慢接近。</span></footer>
+</main></div>
+<dialog id="status-dialog"><button id="close-dialog" class="dialog-close" aria-label="关闭">×</button><p class="eyebrow">SYSTEM STATUS</p><h2>运行状态</h2><div id="status-content"></div><p class="muted">当前为本机单用户内测版。云端多用户服务尚未发布。</p></dialog>
+</body></html>
