@@ -41,20 +41,38 @@ def process_sample(source, destination):
         ink=cv2.warpAffine(ink,matrix,(gray.shape[1],gray.shape[0]),flags=cv2.INTER_NEAREST,borderValue=0)
     x,y,w,h=cv2.boundingRect(cv2.findNonZero(ink))
     if h<18: raise ValueError('笔迹高度太小，请靠近拍摄。')
+    # Detect dense text bodies first; sparse descenders/dots must not bridge lines.
     projection=ink.sum(axis=1)
-    rows=(projection>max(2,ink.shape[1]*.001)).astype('uint8')
-    rows=cv2.morphologyEx(rows[:,None],cv2.MORPH_CLOSE,np.ones((7,1),np.uint8))[:,0]
+    smoothed=np.convolve(projection,np.ones(3)/3,mode='same')
+    threshold=max(3,float(smoothed.max())*.08)
+    rows=(smoothed>threshold).astype('uint8')
+    rows=cv2.morphologyEx(rows[:,None],cv2.MORPH_CLOSE,np.ones((3,1),np.uint8))[:,0]
     boundaries=np.flatnonzero(np.diff(np.r_[0,rows,0]))
+    bands=[(int(a),int(b)) for a,b in zip(boundaries[::2],boundaries[1::2])
+           if b-a>=4 and int(ink[a:b].sum())>=50]
+    centers=np.array([(a+b)/2 for a,b in bands])
+    count,labels,stats,centroids=cv2.connectedComponentsWithStats(ink,8)
+    groups=[[] for _ in bands]
+    # Assign entire connected strokes, never truncate them at a horizontal cut.
+    for label in range(1,count):
+        if stats[label,cv2.CC_STAT_AREA]<3 or not bands: continue
+        # Ignore vertical scan rules crossing several text bodies.
+        if stats[label,cv2.CC_STAT_WIDTH]<=2 and stats[label,cv2.CC_STAT_HEIGHT]>3*np.median([b-a for a,b in bands]): continue
+        scores=[int(np.count_nonzero(labels[a:b,stats[label,0]:stats[label,0]+stats[label,2]]==label)) for a,b in bands]
+        owner=int(np.argmax(scores)) if max(scores)>0 else int(np.argmin(abs(centers-centroids[label,1])))
+        groups[owner].append(label)
     crops=[]
-    for start,end in zip(boundaries[::2],boundaries[1::2]):
-        if end-start<8 or int(ink[start:end].sum())<50: continue
-        coords=cv2.findNonZero(ink[start:end])
-        lx,ly,lw,lh=cv2.boundingRect(coords)
-        if lw<25: continue
-        top=max(0,start+ly-5); bottom=min(gray.shape[0],start+ly+lh+5)
-        left=max(0,lx-6); right=min(gray.shape[1],lx+lw+6)
-        crop=Image.fromarray(normal[top:bottom,left:right])
-        name=f'line-{len(crops):03}.png'; crop.save(destination/name)
+    for group in groups:
+        if not group: continue
+        mask=np.isin(labels,group)
+        coords=cv2.findNonZero(mask.astype('uint8'))
+        left,top,lw,lh=cv2.boundingRect(coords)
+        if lw<25 or lh<8: continue
+        right=min(gray.shape[1],left+lw+6);bottom=min(gray.shape[0],top+lh+5)
+        left=max(0,left-6);top=max(0,top-5)
+        isolated=np.where(mask[top:bottom,left:right],normal[top:bottom,left:right],255).astype('uint8')
+        crop=Image.fromarray(isolated)
+        name=f'line-{len(crops):03}.png';crop.save(destination/name)
         crops.append({'file':name,'width':crop.width,'height':crop.height,'bbox':[int(left),int(top),int(right),int(bottom)]})
     if not crops: raise ValueError('未能切分出文字行，请用横向、清晰、行距适中的样本。')
     if len(crops)>24: raise ValueError('检测到过多区域，请只上传一段字迹，并裁去其他内容。')

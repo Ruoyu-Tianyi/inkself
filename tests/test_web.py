@@ -92,6 +92,18 @@ class WebAPI(unittest.TestCase):
         with TestClient(w.app):
             self.assertEqual(w.read(folder/'job.json')['status'],'interrupted')
 
+    def test_tight_lines_with_sparse_bridging_strokes(self):
+        from web.samples import process_sample
+        image=Image.new('RGB',(1400,350),'white');draw=ImageDraw.Draw(image)
+        font=ImageFont.truetype('C:/Windows/Fonts/arial.ttf' if Path('C:/Windows/Fonts/arial.ttf').exists() else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',36)
+        for i in range(5):draw.text((35,15+i*48),'Bright ideas bring 0123456789 and quiet thoughts.',font=font,fill='black')
+        # A few sparse pixels between bodies must not merge the text lines.
+        draw.line((10,25,10,255),fill='black',width=1)
+        source=self.data/'tight.png';image.save(source)
+        result=process_sample(source,self.data/'tight-lines')
+        self.assertEqual(len(result['lines']),5)
+        self.assertTrue(all(line['height']<95 for line in result['lines']))
+
     def test_traversal_and_prompt(self):
         self.assertEqual(self.client.get('/api/profiles/not-an-id/sample/normalized.png').status_code,404)
         self.assertTrue(self.client.get('/api/prompt.pdf').content.startswith(b'%PDF'))
