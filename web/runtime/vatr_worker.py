@@ -13,6 +13,27 @@ def run(request_path):
     request=json.loads(Path(request_path).read_text(encoding='utf-8'))
     root=Path(request['model']).resolve();output=Path(request['output']).resolve()
     os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1';os.environ['MPLBACKEND']='Agg'
+    try:
+        from .reference_renderer import load_bank,reference_token,calibrate_model_image
+    except ImportError:
+        from reference_renderer import load_bank,reference_token,calibrate_model_image
+    mode=request.get('render_mode','model')
+    if mode not in ('model','model-calibrated','reference'):raise ValueError('Unknown handwriting renderer.')
+    bank=load_bank(request['reference_bank']) if mode in ('model-calibrated','reference') else None
+    if mode=='reference':
+        result=[]
+        for token in re.findall(r'\n|[^\s]+',request['text']):
+            if token=='\n':result.append({'newline':True});continue
+            image,metadata=reference_token(bank,token)
+            name=f'word-{len(result):04}.png';image.save(output/name)
+            result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
+        record={'model':{'name':'Reviewed reference words and glyphs','device':'cpu','mode':mode,
+                'limit':'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.'},
+                'duration_seconds':round(time.monotonic()-started,2),'words':result,
+                'validation':'Reviewed sample label mapping; owner similarity review still required.'}
+        (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
+        return
+
     import numpy as np
     import torch
     import torchvision.models as tv
@@ -45,7 +66,8 @@ def run(request_path):
         raise ValueError('Generator checkpoint does not match architecture: '+repr((sorted(set(expected)-set(weights))[:8],sorted(set(weights)-set(expected))[:8])))
     generator.load_state_dict(weights,strict=True);del weights
     chunks=[]
-    for path in request['styles']:
+    style_paths=[str(bank['_root']/record['file']) for record in bank['words'].values()] if bank else request['styles']
+    for path in style_paths:
         with Image.open(path) as image:
             image=image.convert('L')
             image=image.resize((max(1,round(image.width*32/image.height)),32),Image.Resampling.LANCZOS)
@@ -74,6 +96,11 @@ def run(request_path):
             if cache: np.savez_compressed(cache,style=style.cpu().numpy())
         for token in re.findall(r'\n|[^\s]+',request['text']):
             if token=='\n':result.append({'newline':True});continue
+            if bank and re.fullmatch(r'[0-9.+%\-=]+',token):
+                image,metadata=reference_token(bank,token,prefer_words=False)
+                name=f'word-{len(result):04}.png';image.save(output/name)
+                result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
+                continue
             if any(char not in encoding for char in token):raise ValueError('Unsupported model character in '+repr(token))
             query=torch.tensor([[encoding[char] for char in token]],dtype=torch.long)
             generated=generator.generate(style,query)[0,0,:,:len(token)*args.resolution]
@@ -81,13 +108,15 @@ def run(request_path):
             if not np.isfinite(raw).all():raise ValueError('Model produced invalid pixels.')
             array=np.clip((raw+1)*127.5,0,255).astype('uint8')
             if np.count_nonzero(array<180)<5 or np.mean(array<180)>.8:raise ValueError('Model produced an empty or invalid word image.')
-            name=f'word-{len(result):04}.png';Image.fromarray(array).save(output/name)
-            result.append({'text':token,'file':name,'width':array.shape[1],'height':array.shape[0]})
+            image=Image.fromarray(array);metadata={}
+            if bank:image,metadata=calibrate_model_image(image,bank)
+            name=f'word-{len(result):04}.png';image.save(output/name)
+            result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
             print('Generated',len(result),flush=True)
         # Persist actual encoder output, not a claim of personalized model training.
         np.savez_compressed(output/'style-embedding.npz',style=style.cpu().numpy())
     record={'model':{'name':'VATr++','repository':'blowing-up-groundhogs/vatrpp',
-             'revision':'fb73be2be8e96ce70d9cad9675a30667e19ac376','device':'cpu','generator_only':True},
+             'revision':'fb73be2be8e96ce70d9cad9675a30667e19ac376','device':'cpu','generator_only':True,'mode':mode,'numeric_source':'reviewed reference glyphs' if bank else 'generative model'},
             'duration_seconds':round(time.monotonic()-started,2),'style_patches':len(chunks),
             'style_cache_used':cache_used,'words':result,
             'validation':'not OCR verified; human review required'}

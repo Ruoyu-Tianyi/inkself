@@ -171,6 +171,7 @@ class Generation(BaseModel):
     line_spacing:float=Field(default=1.6,ge=1.2,le=2.2)
     ink:str=Field(default='#263d57',pattern=r'^#[0-9a-fA-F]{6}$')
     seed:int=Field(default=42,ge=0,le=2147483647)
+    render_mode:Literal['model','model-calibrated','reference']='model'
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -178,10 +179,21 @@ def generate(body:Generation):
     if not text.strip():raise HTTPException(422,'请输入需要生成的英文或数字。')
     rgb=[int(body.ink[i:i+2],16) for i in (1,3,5)]
     if sum(a*b for a,b in zip(rgb,(.2126,.7152,.0722)))>200:raise HTTPException(422,'墨色太浅，请选择深色以保证字迹可读。')
-    missing=sorted(set(text)-ALPHABET-{'\n'})
-    if missing:raise HTTPException(422,'当前模型不支持这些字符：'+''.join(missing))
+    bank=None;bank_path=None
+    if body.render_mode!='model':
+        from .runtime.reference_renderer import load_bank,missing_characters
+        folder=profile_path(body.profile_id);profile=read(folder/'profile.json')
+        if not profile.get('reference_bank'):raise HTTPException(409,'此档案还没有逐字核对的原稿字形库。')
+        bank_path=(folder/profile['reference_bank']).resolve()
+        if not bank_path.is_relative_to(folder.resolve()):raise HTTPException(409,'原稿字形库路径无效。')
+        try:
+            bank=load_bank(bank_path)
+            if bank.get('source_sha256')!=profile['sample_sha256']:raise ValueError('原稿来源不匹配。')
+        except (ValueError,OSError,KeyError) as error:raise HTTPException(409,str(error))
+    missing=missing_characters(bank,text) if body.render_mode=='reference' else sorted(set(text)-ALPHABET-{'\n'})
+    if missing:raise HTTPException(422,'当前生成方式不支持这些字符：'+''.join(missing))
     if any(len(word)>32 for word in text.split()):raise HTTPException(422,'单个连续词不能超过 32 个字符，请增加空格。')
-    if not model_status()['ready']:raise HTTPException(503,'生成模型尚未安装完成，请稍后再试。')
+    if body.render_mode!='reference' and not model_status()['ready']:raise HTTPException(503,'生成模型尚未安装完成，请稍后再试。')
     with LOCK:
         folder=profile_path(body.profile_id);profile=read(folder/'profile.json')
         if profile['status']!='ready':raise HTTPException(409,'请先检查并确认采样图片。')
@@ -193,9 +205,10 @@ def generate(body:Generation):
              'content_verification':'needs-human-review','similarity':'not-evaluated'}
         write(dest/'job.json',job)
         paths=[str(folder/'sample'/profile['sample']['lines'][i]['file']) for i in profile['selected_lines']]
-        cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2').encode()).hexdigest()[:20]
+        cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2'+body.render_mode+(hashlib.sha256(bank_path.read_bytes()).hexdigest() if bank_path else '')).encode()).hexdigest()[:20]
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
-                 'style_cache':str(folder/f'style-{cache_key}.npz')}
+                 'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode}
+        if bank_path:request['reference_bank']=str(bank_path)
         write(dest/'request.json',request)
         profile['preferences']=body.model_dump(exclude={'profile_id','text'})
         write(folder/'profile.json',profile)
@@ -227,10 +240,10 @@ def compose_pdf(folder,job,generated):
     size=job['preferences']['size'];spacing=job['preferences']['line_spacing'];ink=job['preferences']['ink']
     page_w,page_h=1240,1754;margin=90;scale=page_w/595.2756
     target_height=max(24,int(size*scale*1.4));line_height=max(target_height+5,int(size*scale*spacing))
-    pages=[];page=Image.new('RGB',(page_w,page_h),'white');x=y=margin
+    pages=[];page=Image.new('RGB',(page_w,page_h),'white');x=y=margin;current_leading=line_height
     for item in generated['words']:
         if item.get('newline'):
-            x=margin;y+=line_height
+            x=margin;y+=current_leading;current_leading=line_height
             continue
         path=folder/item['file']
         if path.resolve().parent!=folder.resolve():raise ValueError('生成结果路径无效。')
@@ -238,12 +251,17 @@ def compose_pdf(folder,job,generated):
         box=ImageOps.invert(word).point(lambda p:255 if p>45 else 0).getbbox()
         if not box:raise ValueError('模型输出了空白词，请重试。')
         # Keep fixed-height model crops to retain relative letter height and baseline.
-        word=word.resize((max(1,round(word.width*target_height/word.height)),target_height),Image.Resampling.LANCZOS)
+        factor=target_height/float(item.get('em_height',word.height))
+        baseline=float(item.get('baseline',26))
+        word=word.resize((max(1,round(word.width*factor)),max(1,round(word.height*factor))),Image.Resampling.LANCZOS)
+        offset=round(target_height*26/32-baseline*factor) if 'baseline' in item else 0
         if word.width>page_w-2*margin:raise ValueError('单词过长，请缩小字号或拆分内容。')
-        if x+word.width>page_w-margin:x=margin;y+=line_height
-        if y+target_height>page_h-margin:
+        if x+word.width>page_w-margin:x=margin;y+=current_leading;current_leading=line_height
+        if y+max(target_height,offset+word.height)>page_h-margin:
             pages.append(page);page=Image.new('RGB',(page_w,page_h),'white');x=y=margin
-        colored=ImageOps.colorize(word,black=ink,white='white');page.paste(colored,(x,y))
+        if y+offset<margin:y=margin-offset
+        current_leading=max(current_leading,offset+word.height+5)
+        colored=ImageOps.colorize(word,black=ink,white='white');page.paste(colored,(x,y+offset))
         x+=word.width+round(size*scale*.45)
     pages.append(page)
     c=canvas.Canvas(str(folder/'result.pdf'),pagesize=(595.2756,841.8898),invariant=1)
