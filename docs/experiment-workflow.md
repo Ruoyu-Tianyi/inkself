@@ -31,9 +31,19 @@ Save a private suite such as `.local/experiments/suite.json`:
 All requested characters must exist in the bank. Missing characters, invalid
 models, invalid page settings and unsafe case names fail before any output is
 created. Case IDs use letters, digits, hyphens or underscores. Keep each text at
-20,000 characters or fewer. The current renderers normalize spacing between
-tokens; line breaks are retained. Use visible words and line breaks rather than
+20,000 characters or fewer. The compositor measures visible ink edges and varies
+word gaps using frozen sample statistics; line breaks are retained. Use visible words and line breaks rather than
 spaces for layout. Pages that cannot fit an individual word fail explicitly.
+
+The optional top-level `word_spacing` object stores the JSON result of
+`web.runtime.word_spacing.fit_word_spacing(...)`. Supply selected English source
+line images and reviewed word coordinates for the strongest evidence. The model
+records measured gaps, evidence labels and source hashes. It is copied into the
+suite snapshot and each request, so replay does not need the original photos.
+Without this object the compositor uses explicitly labeled conservative spacing,
+not a claim that the writer's word gaps were learned. Each layout records realized
+boundary gaps, image crops and a fingerprint covering text, rasters, settings,
+spacing statistics and layout code. A fixed seed reproduces the same spacing.
 
 ## Generate a comparison
 

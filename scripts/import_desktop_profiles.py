@@ -125,6 +125,12 @@ def _profile(folder: Path, expected_id: str) -> None:
             or len(set(selected)) != len(selected)
             or (profile['status'] == 'ready' and not selected)):
         raise ValueError('Invalid selected sample lines.')
+    math_lines = profile.get('math_lines', [])
+    if (not isinstance(math_lines, list)
+            or any(type(i) is not int or not 0 <= i < len(lines) for i in math_lines)
+            or len(set(math_lines)) != len(math_lines)
+            or set(math_lines) & set(selected)):
+        raise ValueError('Invalid mathematics sample lines.')
     bank_path = None
     if 'reference_bank' in profile:
         bank_path = _asset(folder, profile['reference_bank'])

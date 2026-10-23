@@ -27,6 +27,58 @@ def paragraph(count, label='word'):
 
 
 class DocumentLayout(unittest.TestCase):
+    def test_sampled_gaps_are_reproducible_and_match_wrap_placements(self):
+        from web.runtime.word_spacing import fit_word_spacing
+        model=fit_word_spacing()
+        items=[word(str(index),width=160) for index in range(150)]
+        prefs={**PREFERENCES,'seed':27}
+        plan=plan_document(items,prefs,page_h=350,margin=20,word_spacing=model)
+        self.assert_bounds_and_order(items,plan)
+        self.assertEqual(plan,plan_document(items,prefs,page_h=350,margin=20,word_spacing=model))
+        changed=plan_document(items,{**prefs,'seed':28},page_h=350,margin=20,word_spacing=model)
+        self.assertNotEqual(plan['placements'],changed['placements'])
+        gaps=[p['gap_before'] for p in plan['placements'] if p['gap_before']]
+        self.assertGreater(len(set(gaps)),5)
+        by_line={}
+        for entry in plan['placements']:by_line.setdefault(entry['line'],[]).append(entry)
+        for line in by_line.values():
+            self.assertEqual(line[0]['gap_before'],0)
+            for left,right in zip(line,line[1:]):
+                self.assertEqual(right['x']-left['x']-left['width'],right['gap_before'])
+
+    def test_source_adjacent_punctuation_does_not_receive_a_word_gap(self):
+        from web.runtime.word_spacing import fit_word_spacing
+        items=[word('Value'),word('x',width=20,math=True,space_before=True),
+               word('.',width=3,space_before=False),word('Next',space_before=True)]
+        plan=plan_document(items,PREFERENCES,word_spacing=fit_word_spacing())
+        self.assertEqual(plan['placements'][2]['gap_before'],0)
+        self.assertGreater(plan['placements'][1]['gap_before'],0)
+        self.assertGreater(plan['placements'][3]['gap_before'],0)
+        self.assert_bounds_and_order(items,plan)
+
+    def test_composition_trims_canvas_padding_and_preserves_visible_ink(self):
+        import json
+        from PIL import ImageDraw
+        from web.runtime.word_spacing import fit_word_spacing
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            image=Image.new('L',(100,32),255)
+            ImageDraw.Draw(image).rectangle((40,5,58,26),fill=0)
+            image.save(folder/'padded.png')
+            words=[word(str(i),file='padded.png') for i in range(40)]
+            compose_document(folder,{'text':' '.join(str(i) for i in range(40)),
+                'preferences':{**PREFERENCES,'seed':17}},
+                {'model':{},'words':words,'word_spacing':fit_word_spacing()})
+            plan=json.loads((folder/'layout.json').read_text())
+            self.assertEqual(plan['provenance']['word_spacing']['method'],'conservative-default')
+            self.assertTrue(all(p['source_image_box']==[39,0,60,32] for p in plan['placements']))
+            with Image.open(folder/'page-001.png') as page:
+                for p in plan['placements']:
+                    if p['page']==1:
+                        crop=page.crop((p['x'],p['y'],p['x']+p['width'],p['y']+p['height'])).convert('L')
+                        self.assertLess(min(crop.getdata()),80)
+            self.assert_bounds_and_order(words,plan)
+
     def assert_bounds_and_order(self, items, plan):
         expected = [index for index, item in enumerate(items) if not item.get('newline')]
         self.assertEqual([entry['item_index'] for entry in plan['placements']], expected)

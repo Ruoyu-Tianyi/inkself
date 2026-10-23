@@ -6,11 +6,37 @@ formula meaning, or textual correctness.
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import re
 from pathlib import Path
 
 from PIL import Image, ImageOps
+
+VERSION = 'inkself-document-layout-2'
+
+
+def _spacing_gaps(items, model, seed):
+    from .runtime.word_spacing import sample_word_gaps, validate_word_spacing
+    validate_word_spacing(model)
+    ratios, group, paragraph = {}, [], 0
+
+    def finish():
+        nonlocal group, paragraph
+        contexts = [{'left': items[group[pos-1]].get('text','') if pos else '',
+                     'right': items[item_index].get('text','')} for pos,item_index in enumerate(group)]
+        values = sample_word_gaps(model, len(group), seed=seed, paragraph=paragraph, contexts=contexts)
+        ratios.update(zip(group, values))
+        group = []
+        paragraph += 1
+
+    for index, item in enumerate(items):
+        if item.get('newline') or item.get('display_math'):
+            finish()
+        else:
+            group.append(index)
+    finish()
+    return ratios
 
 
 def _number(value, name, positive=False):
@@ -21,7 +47,7 @@ def _number(value, name, positive=False):
     return float(value)
 
 
-def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
+def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_spacing=None):
     """Plan from item dimensions without opening images or authoring a PDF.
 
     Every drawable item needs width/height; baseline/em_height are optional for
@@ -36,6 +62,7 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
     em = max(24, int(size * scale * 1.4))
     leading = max(em + 5, int(size * scale * spacing))
     word_gap = max(1, round(size * scale * .45))
+    ratios = _spacing_gaps(items, word_spacing, preferences.get('seed', 42)) if word_spacing is not None else None
     available = page_w - 2 * margin
     capacity = page_h - 2 * margin
     nominal_ascent = round(em * 26 / 32)
@@ -85,6 +112,8 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
         piece = {'item_index': index, 'width': max(1, round(width * factor)),
                  'height': max(1, round(height * factor)), 'baseline': round(original_baseline * factor),
                  'effective_scale': 1.0}
+        if 'source_image_box' in item:
+            piece['source_image_box'] = item['source_image_box']
         if piece['width'] > available:
             if not item.get('display_math'):
                 raise ValueError('An item is wider than the printable page; reduce its size or split it.')
@@ -106,9 +135,14 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
             paragraph += 1
             display_break_pending = True
         else:
-            next_width = pending_width + (word_gap if pending else 0) + piece['width']
+            gap = max(1, round(ratios[index] * em)) if ratios is not None else word_gap
+            if item.get('space_before') is False:
+                gap = 0
+            piece['gap_before'] = gap if pending else 0
+            next_width = pending_width + piece['gap_before'] + piece['width']
             if pending and next_width > available:
                 finish()
+                piece['gap_before'] = 0
                 next_width = piece['width']
             pending.append(piece)
             pending_width = next_width
@@ -138,13 +172,17 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
         item_indices = []
         x = round(start_x)
         for piece in line['pieces']:
+            x += piece.get('gap_before', 0)
             entry = {'item_index': piece['item_index'], 'page': page, 'line': line_id,
                      'x': x, 'y': baseline_y - piece['baseline'],
                      'width': piece['width'], 'height': piece['height'], 'baseline': baseline_y,
-                     'display_math': line['display_math'], 'effective_scale': piece['effective_scale']}
+                     'display_math': line['display_math'], 'effective_scale': piece['effective_scale'],
+                     'gap_before': piece.get('gap_before', 0)}
+            if 'source_image_box' in piece:
+                entry['source_image_box'] = piece['source_image_box']
             placements.append(entry)
             item_indices.append(piece['item_index'])
-            x += piece['width'] + word_gap
+            x += piece['width']
         planned_lines.append({'line': line_id, 'page': page, 'paragraph': line['paragraph'],
                               'y': y, 'height': line['height'], 'baseline': baseline_y,
                               'item_indices': item_indices, 'heading': line['heading'],
@@ -276,7 +314,7 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90):
         index += count
         if count < len(group):
             new_page()
-    return {'schema_version': 1, 'page_width': page_w, 'page_height': page_h, 'margin': margin,
+    return {'schema_version': 2, 'layout_version': VERSION, 'page_width': page_w, 'page_height': page_h, 'margin': margin,
             'pages': page, 'lines': planned_lines, 'placements': placements, 'warnings': warnings}
 
 
@@ -295,6 +333,8 @@ def compose_document(folder, job, generated):
     from reportlab.pdfgen import canvas
 
     folder = Path(folder).resolve()
+    from .runtime.word_spacing import fit_word_spacing
+    spacing_model = generated.get('word_spacing') or fit_word_spacing()
     items = []
     paths = {}
     for index, item in enumerate(generated['words']):
@@ -304,11 +344,26 @@ def compose_document(folder, job, generated):
         path = _safe_image(folder, item.get('file'))
         with Image.open(path) as source:
             image = source.convert('L')
-            if not ImageOps.invert(image).point(lambda value: 255 if value > 45 else 0).getbbox():
+            bounds = ImageOps.invert(image).point(lambda value: 255 if value > 45 else 0).getbbox()
+            if not bounds:
                 raise ValueError('Generated item contains no visible ink.')
-            items.append({**item, 'width': image.width, 'height': image.height})
+            # Remove raster side bearings before measuring visible word gaps.
+            # Keep a pixel of safety; height and baseline remain unchanged.
+            crop = [max(0, bounds[0] - 1), 0, min(image.width, bounds[2] + 1), image.height]
+            items.append({**item, 'width': crop[2] - crop[0], 'height': image.height,
+                          'source_image_box': crop, 'image_sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
         paths[index] = path
-    plan = plan_document(items, job['preferences'])
+    plan = plan_document(items, job['preferences'], word_spacing=spacing_model)
+    code = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in (
+        ('document_layout.py', Path(__file__)),
+        ('word_spacing.py', Path(__file__).parent / 'runtime/word_spacing.py'))}
+    identity = {'version': VERSION, 'code_sha256': code, 'preferences': job['preferences'],
+                'word_spacing': spacing_model,
+                'text_sha256': hashlib.sha256(job['text'].encode('utf-8')).hexdigest(),
+                'items_sha256': hashlib.sha256(json.dumps(items,sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()}
+    plan['provenance'] = {**identity, 'layout_fingerprint_sha256': hashlib.sha256(
+        json.dumps(identity, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest(),
+        'padding_policy': 'Horizontal ink bounds plus one safety pixel; original rasters and baselines retained.'}
     ink = job['preferences']['ink']
     if not isinstance(ink, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', ink):
         raise ValueError('Invalid ink color.')
@@ -321,7 +376,7 @@ def compose_document(folder, job, generated):
         page = Image.new('RGB', (plan['page_width'], plan['page_height']), 'white')
         for entry in by_page.get(page_number, []):
             with Image.open(paths[entry['item_index']]) as source:
-                word = source.convert('L').resize((entry['width'], entry['height']), Image.Resampling.LANCZOS)
+                word = source.convert('L').crop(entry['source_image_box']).resize((entry['width'], entry['height']), Image.Resampling.LANCZOS)
             page.paste(ImageOps.colorize(word, black=ink, white='white'), (entry['x'], entry['y']))
         filename = folder / f'page-{page_number:03}.png'
         page.save(filename)
@@ -333,6 +388,6 @@ def compose_document(folder, job, generated):
     report = {'requested_text': job['text'], 'model': generated['model'],
               'validation': {'visible_pages': plan['pages'], 'content_identity': 'not-OCR-verified; human review required',
                              'similarity': 'not evaluated'}, 'words': generated['words'],
-              'layout': {'file': 'layout.json', 'warnings': plan['warnings']}}
+              'layout': {'file': 'layout.json', 'warnings': plan['warnings'], 'provenance': plan['provenance']}}
     (folder / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     return plan['pages']

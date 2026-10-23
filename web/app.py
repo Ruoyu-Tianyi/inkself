@@ -16,6 +16,7 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from .samples import process_sample
+from .capture_prompt import PROMPT_ID,LEGACY_PROMPT_ID,PROMPT_LINES,prompt_payload,write_sampling_guide
 from .runtime_paths import data_root,model_root,model_python,model_worker,model_probe_path,resource_root,worker_command
 
 ROOT=resource_root()
@@ -23,12 +24,6 @@ DATA=data_root()
 MODEL=model_root()
 MODEL_PYTHON=model_python()
 MODEL_WORKER=model_worker()
-PROMPT_LINES=[
-    'The quick brown fox jumps over the lazy dog.',
-    'Bright mornings bring fresh ideas, quiet thoughts and new beginnings.',
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz',
-    'Today I wrote 0123456789, then 27 + 58 = 85 and 120 - 45 = 75.',
-    'We paid 24.50 for 3 books; the discount was 15%. Is that right?']
 ALPHABET=set(' !"#%&\'()*+,-./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
 POOL=concurrent.futures.ThreadPoolExecutor(max_workers=1)
 LOCK=threading.RLock()
@@ -105,7 +100,7 @@ def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.3.
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')
-def prompt(): return {'id':'english-numbers-v1','lines':PROMPT_LINES,'instructions':'自然书写，不必刻意工整。深色笔、浅色纸，每句话一行，保持行间距；拍摄整段，避免阴影和反光。'}
+def prompt(): return prompt_payload()
 
 @app.post('/api/documents/markdown',status_code=201)
 async def import_markdown(file:UploadFile=File(...)):
@@ -147,26 +142,18 @@ def onboarding():
             'message':'准备本地 AI，写一段样本，检查第一份试写。样本与生成内容保存在本机。'}
 @app.get('/api/prompt.pdf')
 def prompt_pdf():
-    path=DATA/'sampling-guide.pdf'
+    path=DATA/f'sampling-guide-{PROMPT_ID}.pdf'
     if not path.exists():
-        path.parent.mkdir(parents=True,exist_ok=True)
-        c=canvas.Canvas(str(path),pagesize=(595.2756,841.8898));c.setTitle('Inkself sampling guide')
-        c.setFont('Helvetica-Bold',20);c.drawString(44,785,'Your handwriting, naturally.')
-        c.setFont('Helvetica',10)
-        c.drawString(44,760,'Copy each sentence below in your normal handwriting. Use dark ink on plain paper.')
-        c.drawString(44,744,'Leave a clear gap between lines. Photograph your writing only, without these instructions.')
-        y=698
-        for line in PROMPT_LINES:
-            c.setFont('Helvetica',10);c.drawString(44,y,line);c.setStrokeColorRGB(.82,.82,.8);c.line(44,y-67,551,y-67);y-=113
-        c.save()
+        write_sampling_guide(path)
     return FileResponse(path,filename='inkself-sampling-guide.pdf')
 @app.get('/api/profiles')
 def profiles():
     return sorted([read(p) for p in (DATA/'profiles').glob('*/profile.json')],key=lambda p:p['created_at'],reverse=True)
 @app.post('/api/profiles',status_code=201)
-async def create_profile(name:str=Form(...),file:UploadFile=File(...)):
+async def create_profile(name:str=Form(...),file:UploadFile=File(...),prompt_id:str=Form(PROMPT_ID)):
     name=name.strip()
     if not 1<=len(name)<=60: raise HTTPException(422,'请输入 1–60 字的档案名称。')
+    if prompt_id not in (PROMPT_ID,LEGACY_PROMPT_ID):raise HTTPException(422,'采样内容版本无效，请刷新页面后重试。')
     content=await file.read(20*1024*1024+1)
     if len(content)>20*1024*1024: raise HTTPException(413,'图片不能超过 20 MB。')
     if file.content_type not in ('image/png','image/jpeg','image/webp'): raise HTTPException(415,'请上传 PNG、JPG 或 WebP 图片。')
@@ -176,8 +163,9 @@ async def create_profile(name:str=Form(...),file:UploadFile=File(...)):
         analysis=await __import__('asyncio').to_thread(process_sample,source,folder/'sample')
         source.unlink()
         data={'id':pid,'name':name,'created_at':now(),'status':'needs-review','sample':analysis,
-              'sample_sha256':hashlib.sha256(content).hexdigest(),'selected_lines':[],
-              'prompt_id':'english-numbers-v1','preferences':{'size':16,'line_spacing':1.6,'ink':'#263d57'},
+              'sample_sha256':hashlib.sha256(content).hexdigest(),'selected_lines':[],'math_lines':[],
+              'math_capture_status':'not-provided',
+              'prompt_id':prompt_id,'preferences':{'size':16,'line_spacing':1.6,'ink':'#263d57'},
               'similarity':'not-evaluated'}
         write(folder/'profile.json',data);return data
     except (ValueError,OSError,Image.DecompressionBombError) as error:
@@ -192,13 +180,17 @@ def sample_file(pid:str,file:str):
     return FileResponse(path)
 class Review(BaseModel):
     lines:list[int]=Field(min_length=1,max_length=24)
+    math_lines:list[int]=Field(default_factory=list,max_length=24)
     inspected:Literal[True]
 @app.post('/api/profiles/{pid}/review')
 def review(pid:str,body:Review):
     with LOCK:
         folder=profile_path(pid);data=read(folder/'profile.json')
-        if len(set(body.lines))!=len(body.lines) or any(i<0 or i>=len(data['sample']['lines']) for i in body.lines):raise HTTPException(422,'选择的文字行无效。')
-        data.update(selected_lines=body.lines,status='ready',reviewed_at=now())
+        all_lines=body.lines+body.math_lines
+        if len(set(all_lines))!=len(all_lines) or any(i<0 or i>=len(data['sample']['lines']) for i in all_lines):raise HTTPException(422,'选择的文字行无效，英文与数学行不能重复。')
+        data.update(selected_lines=body.lines,math_lines=body.math_lines,
+                    math_capture_status='captured-needs-alignment' if body.math_lines else 'not-provided',
+                    status='ready',reviewed_at=now())
         write(folder/'profile.json',data);return data
 @app.delete('/api/profiles/{pid}')
 def delete_profile(pid:str):
@@ -273,10 +265,15 @@ def generate(body:Generation):
              'status':'queued','message':'等待生成','text':text,'preferences':body.model_dump(exclude={'profile_id','text','document_id'}),
              'content_verification':'needs-human-review','similarity':'not-evaluated'}
         paths=[str(folder/'sample'/profile['sample']['lines'][i]['file']) for i in profile['selected_lines']]
+        from .runtime.word_spacing import fit_word_spacing
+        spacing_model=fit_word_spacing(bank=bank,sample_dir=folder/'sample',
+            sample_lines=profile['sample']['lines'],selected_lines=profile['selected_lines'],
+            source_sha256=profile['sample_sha256'])
         cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2'+body.render_mode+(hashlib.sha256(bank_path.read_bytes()).hexdigest() if bank_path else '')).encode()).hexdigest()[:20]
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
                  'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode,
-                 'math_enabled':body.math_enabled,'allow_supplemental_math':body.allow_supplemental_math}
+                 'math_enabled':body.math_enabled,'allow_supplemental_math':body.allow_supplemental_math,
+                 'word_spacing':spacing_model}
         if bank_path:request['reference_bank']=str(bank_path)
         if habit_path:request['habit_model']=str(habit_path)
         from .runtime.vatr_worker import request_input_hashes
@@ -292,6 +289,7 @@ def generate(body:Generation):
             write(dest/'job.json',job)
         write(dest/'request.json',request)
         profile['preferences']=body.model_dump(exclude={'profile_id','text','document_id'})
+        profile['word_spacing']=spacing_model
         write(folder/'profile.json',profile)
         POOL.submit(run_job,jid)
     return job

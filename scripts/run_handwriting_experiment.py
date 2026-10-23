@@ -79,6 +79,9 @@ def preflight(bank_path, model_path, suite_path, output, modes, seed):
     suite = json.loads(Path(suite_path).read_text(encoding='utf-8'))
     if not isinstance(suite, dict) or not isinstance(suite.get('cases'), list) or not 1 <= len(suite['cases']) <= 100:
         raise ValueError('Suite requires 1-100 cases.')
+    if 'word_spacing' in suite:
+        from web.runtime.word_spacing import validate_word_spacing
+        validate_word_spacing(suite['word_spacing'])
     preferences = {**DEFAULT_PREFERENCES, **suite.get('preferences', {})}
     if set(preferences) != set(DEFAULT_PREFERENCES):
         raise ValueError('Unknown page preference.')
@@ -138,7 +141,7 @@ def provenance(bank_path, model_path, suite, bank, modes, seed):
         'scripts/run_handwriting_experiment.py', 'scripts/fit_habits.py', 'web/runtime/reference_renderer.py',
         'web/runtime/habit_model.py', 'web/runtime/symbol_style.py', 'web/runtime/vatr_worker.py', 'web/app.py',
         'web/runtime/math_syntax.py', 'web/runtime/math_glyphs.py', 'web/runtime/math_renderer.py', 'web/runtime/math_strokes.py',
-        'web/runtime/document_input.py', 'web/document_layout.py')}
+        'web/runtime/document_input.py', 'web/runtime/word_spacing.py', 'web/document_layout.py')}
     assets = {record['file']: record['sha256'] for group in ('glyphs', 'words') for record in bank.get(group, {}).values()}
     return {
         'bank_sha256': digest(bank_path), 'model_sha256': digest(model_path) if model_path else None,
@@ -178,7 +181,7 @@ def render_case(folder, request, preferences):
     # Elapsed wall time is not part of a reproducible result.
     generated.pop('duration_seconds', None)
     write_json(folder / 'generated.json', generated)
-    compose_pdf(folder, {'text': request['text'], 'preferences': preferences}, generated)
+    compose_pdf(folder, {'text': request['text'], 'preferences': {**preferences,'seed':request['seed']}}, generated)
     return generated
 
 
@@ -232,11 +235,16 @@ def run_experiment(bank_path, model_path, suite_path, output, seed=42, modes=MOD
                 request = {'text': case['text'], 'seed': seed, 'render_mode': mode, 'reference_bank': str(bank_path),
                            'habit_model': str(model_path) if model_path else None, 'output': str(folder), 'model': str(ROOT / '.local/vendor/vatrpp'),
                            'math_enabled':suite['preferences']['math_enabled'], 'allow_supplemental_math':suite['preferences']['allow_supplemental_math']}
+                if 'word_spacing' in suite:
+                    request['word_spacing']=suite['word_spacing']
                 # Freeze the run's original identity across snapshots and cases.
                 # The worker rejects inputs changed after preflight or copying.
                 request['expected_input_hashes'] = {'reference_bank_sha256': identity['bank_sha256']}
                 if mode == 'learned-habits':
                     request['expected_input_hashes']['habit_model_sha256'] = identity['model_sha256']
+                if 'word_spacing' in request:
+                    request['expected_input_hashes']['word_spacing_sha256']=hashlib.sha256(json.dumps(
+                        request['word_spacing'],sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
                 render_case(folder, request, suite['preferences'])
                 for path in sorted(folder.iterdir()):
                     if path.suffix in ('.png', '.pdf') or path.name in ('generated.json', 'report.json','layout.json'):

@@ -88,5 +88,13 @@ class JobProvenance(unittest.TestCase):
         self.assertEqual(model['input_hashes'],request['expected_input_hashes'])
         self.assertEqual(model['habit_model_sha256'],request['expected_input_hashes']['habit_model_sha256'])
 
+    def test_queued_spacing_snapshot_mutation_is_rejected(self):
+        request_path=self.queue('reference');request=web.read(request_path)
+        self.assertIn('word_spacing_sha256',request['expected_input_hashes'])
+        request['word_spacing']['lag_correlation']=.1
+        web.write(request_path,request)
+        with self.assertRaisesRegex(ValueError,'changed after.*queued'):run(request_path)
+        self.assertFalse((request_path.parent/'generated.json').exists())
+
 
 if __name__=='__main__':unittest.main()

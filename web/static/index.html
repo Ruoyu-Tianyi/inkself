@@ -8,7 +8,7 @@
 <div class="sidebar-label">你的工作室</div>
 <nav aria-label="主导航"><button class="nav active" data-view="capture"><span>01</span>采集字迹</button><button class="nav" data-view="compose"><span>02</span>写下新内容</button><button class="nav" data-view="library"><span>03</span>字迹与作品</button></nav>
 <div class="side-note"><span class="status-dot"></span><strong>本地实验版</strong><p>你的样本与作品<br>保存在这台电脑。</p><button id="model-info" class="text-button">查看运行状态 ↗</button></div>
-<div class="sidebar-footer">A little more you.<span>ENGLISH & NUMBERS / 0.2</span></div>
+<div class="sidebar-footer">A little more you.<span>ENGLISH & NUMBERS / 0.3</span></div>
 </aside>
 <main>
 <header class="topbar"><span id="breadcrumb">工作室 / 采集字迹</span><span class="model-chip" id="model-chip">正在连接服务…</span></header>
@@ -20,7 +20,8 @@
 <div class="capture-instructions">
 <div class="section-caption"><span class="number">1</span><h2>写下这一段</h2><a href="/api/prompt.pdf" class="small-link" download>下载采样纸 ↓</a></div>
 <div class="prompt-paper"><span class="paper-label">COPY IN YOUR NATURAL HANDWRITING</span><div id="prompt-lines"></div><span class="paper-foot">大小写 · 数字 · 常用标点</span></div>
-<div class="writing-tips"><p><b>不必刻意工整。</b>保留平时的连笔、字距和倾斜。</p><p>深色笔，浅色纸，每句话一行。只拍你写的内容，避免反光、阴影和印刷文字。</p></div>
+<section class="math-capture" aria-labelledby="math-capture-title"><h3 id="math-capture-title">还要写公式？补充这五行。</h3><p id="math-capture-instructions" class="muted">数学符号与希腊字母单独成行，不熟悉的符号可跳过。</p><div id="math-prompt-lines" class="math-prompt-lines"></div><p id="math-capture-limit" class="muted">上传后将数学行单独标记。当前个人数学字形仍需定位、核对后入库。</p></section>
+<div class="writing-tips"><p><b>不必刻意工整。</b>保留平时的连笔、字距和倾斜，不要刻意把每个词的间隔写成相等。</p><p>深色笔，浅色纸，每句话一行。英文与数学分开书写，保留行间距；只拍你写的内容，避免反光、阴影和印刷文字。</p></div>
 </div>
 <div class="upload-panel">
 <div class="section-caption"><span class="number">2</span><h2>上传你的笔迹</h2></div>
@@ -30,7 +31,7 @@
 <div class="honest-note"><span>实验版说明</span><p>当前使用少样本生成模型。字迹相似度与文字、数字准确性需要核对；不会将通用字体当成你的字迹。</p></div>
 </div>
 </div>
-<div id="sample-review" class="review-panel" hidden><div class="section-caption"><span class="number">3</span><h2>检查识别出的文字行</h2></div><p class="muted">保留清晰、完整的手写文字行。取消选择印刷文字、空白或切分错误的区域；这一步检查图片，不代表模型已经学会你的字迹。</p><div id="sample-warnings"></div><div id="line-grid"></div><label class="check-row"><input type="checkbox" id="review-check">我已检查，所选区域都是我希望使用的完整手写文字行。</label><button class="primary" id="accept-sample">保存字迹，去试写 →</button></div>
+<div id="sample-review" class="review-panel" hidden><div class="section-caption"><span class="number">3</span><h2>检查并分类文字行</h2></div><p class="muted">逐行选择“英文/数字”或“数学/希腊字母”，印刷文字、空白和切分错误选“不使用”。英文模型只读取英文/数字行；数学行保留待定位和字形核对，不代表已自动学会个人数学写法。</p><div id="sample-warnings"></div><div id="line-grid"></div><label class="check-row"><input type="checkbox" id="review-check">我已检查图片和分类，英文/数字行中没有混入数学专用行。</label><button class="primary" id="accept-sample">保存字迹，去试写 →</button></div>
 </section>
 <section class="view" id="compose" hidden>
 <div class="page-heading compact"><p class="eyebrow">SOMETHING ONLY YOU WOULD WRITE.</p><h1>新的内容，熟悉的笔迹。</h1><p>先试写一小段。对照原始样本，看看它是否像你。</p></div>

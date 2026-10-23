@@ -288,13 +288,28 @@ def document_tokens(text, math_enabled=False):
     """Tokenize prose plus explicitly delimited math, retaining prose newlines.
 
     source is the expression inside its delimiters. Escaped dollars in enabled
-    prose are literal dollars. Turning math off preserves the previous tokenizer.
+    prose are literal dollars. Each drawable token records ``space_before``:
+    whether source whitespace precedes it since the last drawable/newline token.
+    A newline retains its own token and resets this flag; math-internal spaces
+    never affect the boundary after its closing delimiter. Turning math off
+    preserves the previous word/line tokenization with the same boundary flags.
     """
     if not isinstance(text, str):
         raise MathSyntaxError('Document must be text.')
+    space_before = False
     def prose(chunk):
-        return [{'newline': True} if word == '\n' else {'text': word}
-                for word in re.findall(r'\n|[^\s]+', chunk)]
+        nonlocal space_before
+        tokens = []
+        for part in re.findall(r'\n|[^\S\n]+|[^\s]+', chunk):
+            if part == '\n':
+                tokens.append({'newline': True})
+                space_before = False
+            elif part.isspace():
+                space_before = True
+            else:
+                tokens.append({'text': part, 'space_before': space_before})
+                space_before = False
+        return tokens
     if not math_enabled:
         return prose(text)
     records = []
@@ -323,7 +338,9 @@ def document_tokens(text, math_enabled=False):
             raise MathSyntaxError(f'Unclosed math delimiter at character {position + 1}.')
         source = text[start:end]
         records.append({'math': parse_math(source), 'source': source,
-                        'display_math': opening in ('$$', '\\[')})
+                        'display_math': opening in ('$$', '\\['),
+                        'space_before': space_before})
+        space_before = False
         position = end + len(closing)
     records.extend(prose(''.join(pending)))
     return records

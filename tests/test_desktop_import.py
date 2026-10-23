@@ -77,6 +77,20 @@ class DesktopImport(unittest.TestCase):
         fixture(self.source, 'b' * 32, ready=False, with_bank=False)
         self.assertEqual(import_profiles(self.source, self.target)['imported_count'], 2)
 
+    def test_math_line_tags_are_preserved_and_cannot_overlap_style_lines(self):
+        (self.folder / 'sample' / 'line-001.png').write_bytes(b'synthetic mathematics line')
+        self.profile['sample']['lines'].append({'file':'line-001.png','width':20,'height':10})
+        self.profile.update(math_lines=[1],math_capture_status='captured-needs-alignment')
+        write(self.folder/'profile.json',self.profile)
+        import_profiles(self.source,self.target)
+        copied=json.loads((self.target/'profiles'/('a'*32)/'profile.json').read_text())
+        self.assertEqual(copied['math_lines'],[1])
+        for math_lines in [[0],[1,1],[True],[-1],[2],None]:
+            with self.subTest(math_lines=math_lines):
+                write(self.folder/'profile.json',dict(self.profile,math_lines=math_lines))
+                with self.assertRaisesRegex(ValueError,'mathematics sample lines'):
+                    import_profiles(self.source,self.root/'invalid target')
+
     def test_validates_all_profiles_before_creating_target(self):
         other, profile = fixture(self.source, 'b' * 32)
         profile['status'] = 'unknown'

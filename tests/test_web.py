@@ -53,6 +53,43 @@ class WebAPI(unittest.TestCase):
         with patch.object(w,'model_status',return_value={'ready':True}):
             response=self.client.post('/api/jobs',headers=self.headers,json={'profile_id':p['id'],'text':'Hello'})
             self.assertEqual(response.status_code,409)
+    def test_math_capture_is_retained_but_excluded_from_neural_styles(self):
+        p=self.create();endpoint=f"/api/profiles/{p['id']}/review"
+        response=self.client.post(endpoint,headers=self.headers,json={'lines':[0],'math_lines':[1],'inspected':True})
+        self.assertEqual(response.status_code,200,response.text)
+        reviewed=response.json()
+        self.assertEqual(reviewed['selected_lines'],[0])
+        self.assertEqual(reviewed['math_lines'],[1])
+        self.assertEqual(reviewed['math_capture_status'],'captured-needs-alignment')
+        self.assertEqual(reviewed['prompt_id'],'english-numbers-math-v2')
+        with patch.object(w,'model_status',return_value={'ready':True}),patch.object(w.POOL,'submit'):
+            response=self.client.post('/api/jobs',headers=self.headers,json={'profile_id':p['id'],'text':'Hello 27'})
+        self.assertEqual(response.status_code,202,response.text)
+        request=w.read(self.data/'jobs'/response.json()['id']/'request.json')
+        self.assertEqual(request['styles'],[str(self.data/'profiles'/p['id']/'sample'/p['sample']['lines'][0]['file'])])
+        self.assertTrue((self.data/'profiles'/p['id']/'sample'/p['sample']['lines'][1]['file']).is_file())
+    def test_math_line_tags_validate_and_legacy_payload_still_works(self):
+        p=self.create();endpoint=f"/api/profiles/{p['id']}/review"
+        for math_lines in [[0],[1,1],[-1],[999]]:
+            self.assertEqual(self.client.post(endpoint,headers=self.headers,json={'lines':[0],'math_lines':math_lines,'inspected':True}).status_code,422)
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,json={'lines':[],'math_lines':[1],'inspected':True}).status_code,422)
+        reviewed=self.review(p)
+        self.assertEqual(reviewed['math_lines'],[])
+        self.assertEqual(reviewed['math_capture_status'],'not-provided')
+    def test_sampling_prompt_has_optional_math_and_versioned_two_page_pdf(self):
+        from web.capture_prompt import MATH_LINES,PROMPT_ID
+        prompt=self.client.get('/api/prompt').json()
+        self.assertEqual(prompt['id'],PROMPT_ID)
+        self.assertEqual(prompt['lines'],w.PROMPT_LINES)
+        section=next(section for section in prompt['sections'] if section['purpose']=='math')
+        self.assertTrue(section['optional']);self.assertEqual(section['lines'],MATH_LINES)
+        self.assertIn('α',section['lines'][2]);self.assertIn('√',section['lines'][1])
+        (self.data/'sampling-guide.pdf').write_bytes(b'legacy guide must not be served')
+        response=self.client.get('/api/prompt.pdf')
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.content.startswith(b'%PDF'))
+        self.assertEqual(response.content.count(b'/Type /Page\n'),2)
+        self.assertTrue((self.data/f'sampling-guide-{PROMPT_ID}.pdf').is_file())
     def test_missing_model_and_unsupported_content(self):
         p=self.review(self.create())
         with patch.object(w,'model_status',return_value={'ready':False}):

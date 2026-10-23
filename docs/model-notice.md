@@ -1,5 +1,7 @@
 # 第三方模型说明
 
+采样纸嵌入未修改的 DejaVu Sans 字体以显示数学和希腊字母，字体及其原始许可保存在 `web/static/fonts` 并随应用提供。该字体仅用于采样说明，不用于替代生成结果中的个人字迹。
+
 少样本模式使用 VATr++ 预训练生成器。固定推理实现和权重来自 [blowing-up-groundhogs/vatrpp](https://huggingface.co/blowing-up-groundhogs/vatrpp)，模型卡引用的上游研究项目包括 [EDM-Research/VATr-pp](https://github.com/EDM-Research/VATr-pp) 和 [aimagelab/VATr](https://github.com/aimagelab/VATr)。这与使用已核对个人字形库的原稿保真、习惯适配流程不同。
 
 固定版本：`fb73be2be8e96ce70d9cad9675a30667e19ac376`。HF 模型页标注 MIT，同时要求遵循原仓库许可；该标签不能代替对权重、上游代码、字符原型各自来源与分发条件的核实。特别是字符原型使用 Unifont 衍生数据，须确认其具体版本及相应许可。训练数据的使用条件也需单独核实，不能从模型页标签推定。

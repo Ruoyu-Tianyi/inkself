@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-4'
+RENDERER_VERSION='inkself-runtime-5'
 
 
 def _sha256(path):
@@ -24,6 +24,10 @@ def request_input_hashes(request):
         hashes['reference_bank_sha256']=_sha256(request['reference_bank'])
     if mode=='learned-habits':hashes['habit_model_sha256']=_sha256(request['habit_model'])
     if mode=='model':hashes['style_images_sha256']=[_sha256(path) for path in request['styles']]
+    if request.get('word_spacing') is not None:
+        from web.runtime.word_spacing import validate_word_spacing
+        validate_word_spacing(request['word_spacing'])
+        hashes['word_spacing_sha256']=hashlib.sha256(json.dumps(request['word_spacing'],sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
     return hashes
 
 
@@ -37,10 +41,11 @@ def verify_request_inputs(request):
 
 def renderer_provenance(request,inputs):
     mode=request.get('render_mode','model')
-    names=['vatr_worker.py']
+    names=['vatr_worker.py','word_spacing.py']
     if mode!='model':names.append('reference_renderer.py')
     if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
-    if request.get('math_enabled'):names.extend(['math_syntax.py','math_renderer.py','math_strokes.py','math_glyphs.py','document_input.py'])
+    if mode in ('reference','learned-habits'):names.extend(['math_syntax.py','document_input.py'])
+    if request.get('math_enabled'):names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,
@@ -69,6 +74,8 @@ def run(request_path):
         habit=load_habits(request['habit_model'],bank)
     if request_input_hashes(request)!=input_hashes:raise ValueError('Handwriting inputs changed while loading the job.')
     provenance=renderer_provenance(request,input_hashes)
+    from web.runtime.word_spacing import fit_word_spacing
+    spacing_model=request.get('word_spacing') or fit_word_spacing()
     if mode in ('reference','learned-habits'):
         from web.runtime.document_input import prepare_document
         from web.runtime.math_renderer import render_math
@@ -84,13 +91,14 @@ def run(request_path):
                 text=token['text']
                 image,metadata=habit_token(bank,habit,text,request['seed'],len(result)) if habit else reference_token(bank,text)
             name=f'word-{len(result):04}.png';image.save(output/name)
-            result.append({'text':text,'file':name,'width':image.width,'height':image.height,**metadata})
+            result.append({'text':text,'file':name,'width':image.width,'height':image.height,
+                           'space_before':token.get('space_before',True),**metadata})
         record={'model':{'name':'Sample-fitted handwriting habits' if habit else 'Reviewed reference words and glyphs','device':'cpu','mode':mode,
                 'limit':habit['limits'] if habit else 'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.',
                 'habit_training_words':len(habit['training_words']) if habit else None,
                 'habit_model_sha256':input_hashes.get('habit_model_sha256'),'math_enabled':request.get('math_enabled',False),
                 'supplemental_math_glyphs':supplements,**provenance},
-                'duration_seconds':round(time.monotonic()-started,2),'words':result,
+                'duration_seconds':round(time.monotonic()-started,2),'words':result,'word_spacing':spacing_model,
                 'validation':'Reviewed sample label mapping; owner similarity review still required.'}
         (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
         return
@@ -179,7 +187,7 @@ def run(request_path):
     record={'model':{'name':'VATr++','repository':'blowing-up-groundhogs/vatrpp',
              'revision':'fb73be2be8e96ce70d9cad9675a30667e19ac376','device':'cpu','generator_only':True,'mode':mode,'numeric_source':'reviewed reference glyphs' if bank else 'generative model',**provenance},
             'duration_seconds':round(time.monotonic()-started,2),'style_patches':len(chunks),
-            'style_cache_used':cache_used,'words':result,
+            'style_cache_used':cache_used,'words':result,'word_spacing':spacing_model,
             'validation':'not OCR verified; human review required'}
     (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
     print('Completed',record['duration_seconds'],flush=True)

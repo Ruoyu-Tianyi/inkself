@@ -119,8 +119,10 @@ class MathSyntax(unittest.TestCase):
 class DocumentMathTokens(unittest.TestCase):
     def test_disabled_math_preserves_ordinary_word_and_line_tokenization(self):
         self.assertEqual(document_tokens('A $x$\nB \\(y\\)'),
-                         [{'text': 'A'}, {'text': '$x$'}, {'newline': True},
-                          {'text': 'B'}, {'text': '\\(y\\)'}])
+                         [{'text': 'A', 'space_before': False},
+                          {'text': '$x$', 'space_before': True}, {'newline': True},
+                          {'text': 'B', 'space_before': False},
+                          {'text': '\\(y\\)', 'space_before': True}])
 
     def test_all_four_delimiter_forms_and_source_are_retained(self):
         records = document_tokens('A $x^2$\n$$\\frac{1}{2}$$\nB \\(y+1\\) \\[z_i\\]', True)
@@ -128,21 +130,50 @@ class DocumentMathTokens(unittest.TestCase):
         self.assertEqual([item['source'] for item in math], ['x^2', r'\frac{1}{2}', 'y+1', 'z_i'])
         self.assertEqual([item['display_math'] for item in math], [False, True, False, True])
         self.assertEqual(sum('newline' in item for item in records), 2)
-        self.assertEqual(records[0], {'text': 'A'})
+        self.assertEqual(records[0], {'text': 'A', 'space_before': False})
 
     def test_adjacent_math_and_prose_and_multiline_display(self):
         records = document_tokens('left$x$right\n$$x+\ny$$', True)
-        self.assertEqual(records[0], {'text': 'left'})
-        self.assertEqual(records[2], {'text': 'right'})
+        self.assertEqual(records[0], {'text': 'left', 'space_before': False})
+        self.assertEqual(records[2], {'text': 'right', 'space_before': False})
         self.assertEqual(records[3], {'newline': True})
         self.assertEqual(required_glyphs(records[4]['math']), set('x+y'))
         adjacent = document_tokens('$x$$y$', True)
         self.assertEqual([record['source'] for record in adjacent], ['x', 'y'])
+        self.assertEqual([record['space_before'] for record in adjacent], [False, False])
 
     def test_escaped_dollar_is_literal_and_does_not_close_math(self):
         records = document_tokens(r'Cost \$5; $\text{cost \$5}$', True)
-        self.assertEqual(records[1], {'text': '$5;'})
+        self.assertEqual(records[1], {'text': '$5;', 'space_before': True})
         self.assertEqual(required_glyphs(records[2]['math']), set('cost$5'))
+
+    def test_inline_math_adjacency_distinguishes_punctuation_and_word_spaces(self):
+        records = document_tokens('Value $x$. $x$ is $(y)$,then $z$!', True)
+        self.assertEqual([record['space_before'] for record in records],
+                         [False, True, False, True, True, True, False, True, False])
+        self.assertEqual([record.get('text', record.get('source')) for record in records],
+                         ['Value', 'x', '.', 'x', 'is', '(y)', ',then', 'z', '!'])
+
+    def test_boundary_flags_reset_at_newline_and_ignore_math_internal_spaces(self):
+        records = document_tokens('A \t$x + y $B\nC\n  $z$ D', True)
+        self.assertEqual([record.get('space_before') for record in records],
+                         [False, True, False, None, False, None, True, True])
+        self.assertEqual([record for record in records if record.get('newline')],
+                         [{'newline': True}, {'newline': True}])
+
+    def test_display_math_keeps_existing_breaks_and_has_source_boundary_flags(self):
+        records = document_tokens('Intro\n$$ x+\ny $$\n\nAfter', True)
+        self.assertEqual([record.get('space_before') for record in records],
+                         [False, None, False, None, None, False])
+        self.assertTrue(records[2]['display_math'])
+        self.assertEqual(required_glyphs(records[2]['math']), set('x+y'))
+
+    def test_horizontal_whitespace_boundaries_are_retained_without_extra_tokens(self):
+        records = document_tokens('  A\tB\u00a0C\r\nD')
+        self.assertEqual(records, [
+            {'text': 'A', 'space_before': True}, {'text': 'B', 'space_before': True},
+            {'text': 'C', 'space_before': True}, {'newline': True},
+            {'text': 'D', 'space_before': False}])
 
     def test_unclosed_unmatched_empty_and_nested_delimiters_rejected(self):
         for source in ('$x', '$$x$', r'\(x', r'\[x', r'x\)', r'x\]',
