@@ -166,12 +166,14 @@ def delete_profile(pid:str):
     return {'deleted':True}
 class Generation(BaseModel):
     profile_id:str
-    text:str=Field(min_length=1,max_length=3000)
+    text:str=Field(min_length=1,max_length=20000)
     size:int=Field(default=16,ge=10,le=26)
     line_spacing:float=Field(default=1.6,ge=1.2,le=2.2)
     ink:str=Field(default='#263d57',pattern=r'^#[0-9a-fA-F]{6}$')
     seed:int=Field(default=42,ge=0,le=2147483647)
     render_mode:Literal['model','model-calibrated','reference','learned-habits']='model'
+    math_enabled:bool=False
+    allow_supplemental_math:bool=False
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -198,9 +200,17 @@ def generate(body:Generation):
         if not habit_path.is_relative_to(folder.resolve()):raise HTTPException(409,'习惯适配器路径无效。')
         try:load_habits(habit_path,bank)
         except (ValueError,OSError,KeyError,TypeError) as error:raise HTTPException(409,str(error))
-    missing=missing_characters(bank,text) if body.render_mode in ('reference','learned-habits') else sorted(set(text)-ALPHABET-{'\n'})
-    if missing:raise HTTPException(422,'当前生成方式不支持这些字符：'+''.join(missing))
-    if any(len(word)>32 for word in text.split()):raise HTTPException(422,'单个连续词不能超过 32 个字符，请增加空格。')
+    if body.math_enabled and body.render_mode not in ('reference','learned-habits'):
+        raise HTTPException(422,'数学公式需使用样本习惯适配或原稿字形保真。')
+    if body.render_mode in ('reference','learned-habits'):
+        from .runtime.document_input import prepare_document
+        try:prepare_document(text,bank,body.math_enabled,body.allow_supplemental_math)
+        except ValueError as error:raise HTTPException(422,str(error)) from error
+    else:
+        missing=sorted(set(text)-ALPHABET-{'\n'})
+        if missing:raise HTTPException(422,'当前生成方式不支持这些字符：'+''.join(missing))
+        if any(len(word)>32 for word in text.split()):raise HTTPException(422,'单个连续词不能超过 32 个字符，请增加空格。')
+        if len(text)>3000:raise HTTPException(422,'少样本模型单次最多 3,000 字符；长文请使用样本习惯适配。')
     if body.render_mode not in ('reference','learned-habits') and not model_status()['ready']:raise HTTPException(503,'生成模型尚未安装完成，请稍后再试。')
     with LOCK:
         folder=profile_path(body.profile_id);profile=read(folder/'profile.json')
@@ -214,7 +224,8 @@ def generate(body:Generation):
         paths=[str(folder/'sample'/profile['sample']['lines'][i]['file']) for i in profile['selected_lines']]
         cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2'+body.render_mode+(hashlib.sha256(bank_path.read_bytes()).hexdigest() if bank_path else '')).encode()).hexdigest()[:20]
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
-                 'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode}
+                 'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode,
+                 'math_enabled':body.math_enabled,'allow_supplemental_math':body.allow_supplemental_math}
         if bank_path:request['reference_bank']=str(bank_path)
         if habit_path:request['habit_model']=str(habit_path)
         from .runtime.vatr_worker import request_input_hashes
@@ -230,7 +241,8 @@ def generate(body:Generation):
 def run_job(jid):
     folder=job_path(jid);job=read(folder/'job.json')
     try:
-        job.update(status='running',message='正在提取风格并生成新内容，CPU 运行可能需要几分钟。');write(folder/'job.json',job)
+        local_layout=job['preferences'].get('render_mode') in ('reference','learned-habits')
+        job.update(status='running',message='正在生成字迹、公式并规划分页。' if local_layout else '正在运行本地少样本模型，CPU 生成可能需要几分钟。');write(folder/'job.json',job)
         with (folder/'worker.log').open('w',encoding='utf-8') as log:
             env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',MPLBACKEND='Agg',PYTHONPATH='')
             result=subprocess.run([str(MODEL_PYTHON),str(ROOT/'web/runtime/vatr_worker.py'),str(folder/'request.json')],
@@ -239,8 +251,11 @@ def run_job(jid):
         output=read(folder/'generated.json')
         pages=compose_pdf(folder,job,output)
         job.update(status='needs-review',message='生成完成，请逐字核对文字和数字，并评价字迹相似度。',pages=pages,
+                   layout_warnings=read(folder/'layout.json')['warnings'],
                    completed_at=now(),model=output['model'],duration_seconds=output['duration_seconds'],
                    pdf_sha256=hashlib.sha256((folder/'result.pdf').read_bytes()).hexdigest())
+        if output['model'].get('supplemental_math_glyphs'):
+            job['message']='生成完成；公式中的配套手写字形尚未学习你的个人写法，请核对：'+''.join(output['model']['supplemental_math_glyphs'])
     except subprocess.TimeoutExpired:
         job.update(status='failed',message='生成超过 30 分钟，请缩短内容后重试。')
     except Exception as error:
@@ -248,44 +263,8 @@ def run_job(jid):
     write(folder/'job.json',job)
 
 def compose_pdf(folder,job,generated):
-    from PIL import ImageOps
-    size=job['preferences']['size'];spacing=job['preferences']['line_spacing'];ink=job['preferences']['ink']
-    page_w,page_h=1240,1754;margin=90;scale=page_w/595.2756
-    target_height=max(24,int(size*scale*1.4));line_height=max(target_height+5,int(size*scale*spacing))
-    pages=[];page=Image.new('RGB',(page_w,page_h),'white');x=y=margin;current_leading=line_height
-    for item in generated['words']:
-        if item.get('newline'):
-            x=margin;y+=current_leading;current_leading=line_height
-            continue
-        path=folder/item['file']
-        if path.resolve().parent!=folder.resolve():raise ValueError('生成结果路径无效。')
-        with Image.open(path) as opened:word=opened.convert('L')
-        box=ImageOps.invert(word).point(lambda p:255 if p>45 else 0).getbbox()
-        if not box:raise ValueError('模型输出了空白词，请重试。')
-        # Keep fixed-height model crops to retain relative letter height and baseline.
-        factor=target_height/float(item.get('em_height',word.height))
-        baseline=float(item.get('baseline',26))
-        word=word.resize((max(1,round(word.width*factor)),max(1,round(word.height*factor))),Image.Resampling.LANCZOS)
-        offset=round(target_height*26/32-baseline*factor) if 'baseline' in item else 0
-        if word.width>page_w-2*margin:raise ValueError('单词过长，请缩小字号或拆分内容。')
-        if x+word.width>page_w-margin:x=margin;y+=current_leading;current_leading=line_height
-        if y+max(target_height,offset+word.height)>page_h-margin:
-            pages.append(page);page=Image.new('RGB',(page_w,page_h),'white');x=y=margin
-        if y+offset<margin:y=margin-offset
-        current_leading=max(current_leading,offset+word.height+5)
-        colored=ImageOps.colorize(word,black=ink,white='white');page.paste(colored,(x,y+offset))
-        x+=word.width+round(size*scale*.45)
-    pages.append(page)
-    c=canvas.Canvas(str(folder/'result.pdf'),pagesize=(595.2756,841.8898),invariant=1)
-    c.setTitle('Inkself handwriting preview - requires human review')
-    for i,page in enumerate(pages):
-        filename=folder/f'page-{i+1:03}.png';page.save(filename)
-        c.drawImage(ImageReader(page),0,0,width=595.2756,height=841.8898);c.showPage()
-    c.save()
-    write(folder/'report.json',{'requested_text':job['text'],'model':generated['model'],
-        'validation':{'visible_pages':len(pages),'content_identity':'not-OCR-verified; human review required',
-                      'similarity':'not evaluated'},'words':generated['words']})
-    return len(pages)
+    from .document_layout import compose_document
+    return compose_document(folder,job,generated)
 
 @app.get('/api/jobs')
 def jobs():return sorted([read(p) for p in (DATA/'jobs').glob('*/job.json')],key=lambda j:j['created_at'],reverse=True)
@@ -294,7 +273,7 @@ def job(jid:str):return read(job_path(jid)/'job.json')
 @app.get('/api/jobs/{jid}/files/{file}')
 def job_file(jid:str,file:str):
     folder=job_path(jid)
-    if file not in ('result.pdf','report.json') and not re.fullmatch(r'page-\d{3}\.png',file):raise HTTPException(404,'文件不存在。')
+    if file not in ('result.pdf','report.json','layout.json') and not re.fullmatch(r'page-\d{3}\.png',file):raise HTTPException(404,'文件不存在。')
     path=folder/file
     if not path.is_file():raise HTTPException(404,'文件尚未生成。')
     return FileResponse(path,filename='inkself-handwriting.pdf' if file=='result.pdf' else None)

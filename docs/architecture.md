@@ -31,3 +31,10 @@ Inkself 是少样本个人字迹网页应用，当前在本机以单用户服务
 该引擎与网页生成模型是独立流程。其上下标、数学符号及确定性映射能力不能直接宣称为网页模型的能力；其测试也不能证明网页真人相似度或生成文字准确性通过。
 
 进度见 [产品路线](roadmap.md)，操作见 [使用指南](web-guide.md)。
+
+
+## Document and math pipeline
+
+The reference and habit modes preflight content through `runtime/document_input.py`. Opted-in math is parsed by the bounded, non-executing `math_syntax.py` parser. `math_renderer.py` builds baseline-aware boxes from personal rasters and explicitly allowed `math_glyphs.py` supplements; source provenance and the AST are retained. Mathematical structure is not an OCR or symbolic solving service.
+
+`document_layout.py` plans complete lines and semantic keep groups before assigning pages. It then writes one raster page at a time, with positions, baselines, warnings and display-formula scaling in `layout.json`. Experiment fingerprints include parser, glyph, math and document layout code; image/PDF/layout/report files are hashed for replay. Unknown commands and unapproved missing glyphs fail before a job is queued.

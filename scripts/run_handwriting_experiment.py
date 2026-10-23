@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 MODES = ('reference', 'learned-habits')
-DEFAULT_PREFERENCES = {'size': 16, 'line_spacing': 1.6, 'ink': '#263d57'}
+DEFAULT_PREFERENCES = {'size': 16, 'line_spacing': 1.6, 'ink': '#263d57', 'math_enabled': False, 'allow_supplemental_math': False}
 
 
 def digest(path):
@@ -82,6 +82,8 @@ def preflight(bank_path, model_path, suite_path, output, modes, seed):
     preferences = {**DEFAULT_PREFERENCES, **suite.get('preferences', {})}
     if set(preferences) != set(DEFAULT_PREFERENCES):
         raise ValueError('Unknown page preference.')
+    if any(not isinstance(preferences[name], bool) for name in ('math_enabled','allow_supplemental_math')):
+        raise ValueError('Math preferences must be true or false.')
     if not isinstance(preferences['size'], (int, float)) or not 10 <= preferences['size'] <= 26:
         raise ValueError('Page size must be between 10 and 26.')
     if not isinstance(preferences['line_spacing'], (int, float)) or not 1.2 <= preferences['line_spacing'] <= 2.2:
@@ -110,12 +112,17 @@ def preflight(bank_path, model_path, suite_path, output, modes, seed):
             raise ValueError('Each case requires 1-20000 characters of nonblank text.')
         if 'title' in case and not isinstance(case['title'], str):
             raise ValueError('Case titles must be strings.')
-        if any(len(word) > 32 for word in text.split()):
+        if not preferences['math_enabled'] and any(len(word) > 32 for word in text.split()):
             raise ValueError('Words longer than 32 characters must be split before generation.')
         case['text'] = text = text.replace('\r\n', '\n').replace('\r', '\n').replace('\t', '    ')
-        missing = missing_characters(bank, text)
-        if missing:
-            raise ValueError(f"Unsupported characters in {case['id']}: {''.join(missing)!r}")
+        if preferences['math_enabled']:
+            from web.runtime.document_input import prepare_document
+            try: prepare_document(text,bank,True,preferences['allow_supplemental_math'])
+            except ValueError as error: raise ValueError(f"Invalid math/content in {case['id']}: {error}") from error
+        else:
+            missing = missing_characters(bank, text)
+            if missing:
+                raise ValueError(f"Unsupported characters in {case['id']}: {''.join(missing)!r}")
     suite['preferences'] = preferences
     return bank, model, suite, output, modes
 
@@ -129,7 +136,9 @@ def provenance(bank_path, model_path, suite, bank, modes, seed):
             packages[package] = None
     code = {name: digest(ROOT / name) for name in (
         'scripts/run_handwriting_experiment.py', 'scripts/fit_habits.py', 'web/runtime/reference_renderer.py',
-        'web/runtime/habit_model.py', 'web/runtime/symbol_style.py', 'web/runtime/vatr_worker.py', 'web/app.py')}
+        'web/runtime/habit_model.py', 'web/runtime/symbol_style.py', 'web/runtime/vatr_worker.py', 'web/app.py',
+        'web/runtime/math_syntax.py', 'web/runtime/math_glyphs.py', 'web/runtime/math_renderer.py',
+        'web/runtime/document_input.py', 'web/document_layout.py')}
     assets = {record['file']: record['sha256'] for group in ('glyphs', 'words') for record in bank.get(group, {}).values()}
     return {
         'bank_sha256': digest(bank_path), 'model_sha256': digest(model_path) if model_path else None,
@@ -221,7 +230,8 @@ def run_experiment(bank_path, model_path, suite_path, output, seed=42, modes=MOD
                 folder = output / case['id'] / mode
                 folder.mkdir(parents=True)
                 request = {'text': case['text'], 'seed': seed, 'render_mode': mode, 'reference_bank': str(bank_path),
-                           'habit_model': str(model_path) if model_path else None, 'output': str(folder), 'model': str(ROOT / '.local/vendor/vatrpp')}
+                           'habit_model': str(model_path) if model_path else None, 'output': str(folder), 'model': str(ROOT / '.local/vendor/vatrpp'),
+                           'math_enabled':suite['preferences']['math_enabled'], 'allow_supplemental_math':suite['preferences']['allow_supplemental_math']}
                 # Freeze the run's original identity across snapshots and cases.
                 # The worker rejects inputs changed after preflight or copying.
                 request['expected_input_hashes'] = {'reference_bank_sha256': identity['bank_sha256']}
@@ -229,7 +239,7 @@ def run_experiment(bank_path, model_path, suite_path, output, seed=42, modes=MOD
                     request['expected_input_hashes']['habit_model_sha256'] = identity['model_sha256']
                 render_case(folder, request, suite['preferences'])
                 for path in sorted(folder.iterdir()):
-                    if path.suffix in ('.png', '.pdf') or path.name in ('generated.json', 'report.json'):
+                    if path.suffix in ('.png', '.pdf') or path.name in ('generated.json', 'report.json','layout.json'):
                         manifest['artifact_sha256'][path.relative_to(output).as_posix()] = digest(path)
         (output / 'review.html').write_text(review_html(suite, modes, manifest['artifact_sha256']), encoding='utf-8')
         manifest['artifact_sha256']['review.html'] = digest(output / 'review.html')

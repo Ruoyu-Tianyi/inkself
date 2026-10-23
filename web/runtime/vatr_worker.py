@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-3'
+RENDERER_VERSION='inkself-runtime-4'
 
 
 def _sha256(path):
@@ -40,10 +40,12 @@ def renderer_provenance(request,inputs):
     names=['vatr_worker.py']
     if mode!='model':names.append('reference_renderer.py')
     if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
+    if request.get('math_enabled'):names.extend(['math_syntax.py','math_renderer.py','math_glyphs.py','document_input.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,
-              'input_hashes':inputs,'renderer_sha256':renderer_hash}
+              'input_hashes':inputs,'renderer_sha256':renderer_hash,
+              'math_enabled':request.get('math_enabled',False),'allow_supplemental_math':request.get('allow_supplemental_math',False)}
     return {'renderer_version':RENDERER_VERSION,'renderer_sha256':renderer_hash,
             'input_hashes':inputs,'input_fingerprint_sha256':hashlib.sha256(
                 json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
@@ -68,16 +70,26 @@ def run(request_path):
     if request_input_hashes(request)!=input_hashes:raise ValueError('Handwriting inputs changed while loading the job.')
     provenance=renderer_provenance(request,input_hashes)
     if mode in ('reference','learned-habits'):
+        from web.runtime.document_input import prepare_document
+        from web.runtime.math_renderer import render_math
+        tokens,supplements=prepare_document(request['text'],bank,request.get('math_enabled',False),request.get('allow_supplemental_math',False))
         result=[]
-        for token in re.findall(r'\n|[^\s]+',request['text']):
-            if token=='\n':result.append({'newline':True});continue
-            image,metadata=habit_token(bank,habit,token,request['seed'],len(result)) if habit else reference_token(bank,token)
+        for token in tokens:
+            if token.get('newline'):result.append({'newline':True});continue
+            if 'math' in token:
+                image,metadata=render_math(token['math'],bank,habit,request['seed'],len(result),request.get('allow_supplemental_math',False))
+                text=token['source']
+                metadata.update(math=True,display_math=token['display_math'])
+            else:
+                text=token['text']
+                image,metadata=habit_token(bank,habit,text,request['seed'],len(result)) if habit else reference_token(bank,text)
             name=f'word-{len(result):04}.png';image.save(output/name)
-            result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
+            result.append({'text':text,'file':name,'width':image.width,'height':image.height,**metadata})
         record={'model':{'name':'Sample-fitted handwriting habits' if habit else 'Reviewed reference words and glyphs','device':'cpu','mode':mode,
                 'limit':habit['limits'] if habit else 'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.',
                 'habit_training_words':len(habit['training_words']) if habit else None,
-                'habit_model_sha256':input_hashes.get('habit_model_sha256'),**provenance},
+                'habit_model_sha256':input_hashes.get('habit_model_sha256'),'math_enabled':request.get('math_enabled',False),
+                'supplemental_math_glyphs':supplements,**provenance},
                 'duration_seconds':round(time.monotonic()-started,2),'words':result,
                 'validation':'Reviewed sample label mapping; owner similarity review still required.'}
         (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
