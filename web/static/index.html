@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2eb"><title>Inkself · 留住你的字迹</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2eb"><title>Inkself · 留住你的字迹</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script><script src="/documents.js" defer></script></head>
 <body>
 <div class="shell">
 <aside class="sidebar">
@@ -13,6 +13,7 @@
 <main>
 <header class="topbar"><span id="breadcrumb">工作室 / 采集字迹</span><span class="model-chip" id="model-chip">正在连接服务…</span></header>
 <div id="notice" role="status" aria-live="polite" hidden></div>
+<section id="getting-started" class="getting-started" hidden aria-label="首次使用引导"><div><p class="eyebrow">YOUR FIRST PAGE</p><h2>从第一份试写开始。</h2><p id="onboarding-message">准备本地 AI，写一段样本，检查第一份试写。</p><ol id="onboarding-steps"><li>准备本地 AI</li><li>上传并检查笔迹</li><li>生成并核对试写</li></ol><p id="setup-progress" class="muted" role="status"></p></div><button type="button" id="onboarding-action" class="primary">准备本地 AI</button></section>
 <section class="view" id="capture">
 <div class="page-heading"><p class="eyebrow">YOUR WORDS. YOUR HAND.</p><h1>从一段笔迹，<br>开始认识你的书写。</h1><p>自然地抄写下面的内容，拍照上传。让新的文字，带上你的习惯。</p></div>
 <div class="workspace capture-grid">

@@ -32,14 +32,36 @@ def data_root() -> Path:
     override = os.environ.get('INKSELF_DATA')
     if override:
         return Path(override).expanduser().resolve()
-    return executable_directory() / 'data' if is_frozen() else resource_root() / '.local/web-data'
+    if is_frozen():
+        if (executable_directory() / 'installed-mode.json').is_file():
+            local = os.environ.get('LOCALAPPDATA')
+            if not local:
+                raise RuntimeError('Windows 未提供个人应用数据目录。')
+            return Path(local).resolve() / 'Inkself/data'
+        return executable_directory() / 'data'
+    return resource_root() / '.local/web-data'
 
 
 def model_root() -> Path:
     override = os.environ.get('INKSELF_MODEL_DIR')
     if override:
         return Path(override).expanduser().resolve()
-    return executable_directory() / 'models/vatrpp' if is_frozen() else resource_root() / '.local/vendor/vatrpp'
+    if is_frozen():
+        if (executable_directory() / 'installed-mode.json').is_file():
+            return data_root() / 'models/vatrpp'
+        return executable_directory() / 'models/vatrpp'
+    return resource_root() / '.local/vendor/vatrpp'
+
+
+def model_worker() -> Path | None:
+    override = os.environ.get('INKSELF_MODEL_WORKER')
+    if override:
+        return Path(override).expanduser().resolve()
+    if is_frozen():
+        candidate = executable_directory() / 'ai-runtime/InkselfAI.exe'
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def model_python() -> Path | None:
@@ -68,6 +90,9 @@ def worker_command(request_path: Path | str, render_mode: str, *, python: Path |
     request = str(Path(request_path).resolve())
     if is_frozen() and render_mode in LOCAL_RENDERERS:
         return [sys.executable, '--worker', request]
+    worker = model_worker()
+    if worker is not None and (os.environ.get('INKSELF_MODEL_WORKER') or python is None):
+        return [str(worker), '--worker', request]
     interpreter = Path(python) if python is not None else model_python()
     if interpreter is None:
         raise RuntimeError('此桌面包未包含少样本模型运行环境；请配置 INKSELF_MODEL_PYTHON，或使用已导入档案的样本习惯适配。')

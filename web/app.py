@@ -16,12 +16,13 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from .samples import process_sample
-from .runtime_paths import data_root,model_root,model_python,model_probe_path,resource_root,worker_command
+from .runtime_paths import data_root,model_root,model_python,model_worker,model_probe_path,resource_root,worker_command
 
 ROOT=resource_root()
 DATA=data_root()
 MODEL=model_root()
 MODEL_PYTHON=model_python()
+MODEL_WORKER=model_worker()
 PROMPT_LINES=[
     'The quick brown fox jumps over the lazy dog.',
     'Bright mornings bring fresh ideas, quiet thoughts and new beginnings.',
@@ -57,13 +58,17 @@ def job_path(jid):
 def model_status():
     required=['model.safetensors','config.json','models/model.py','files/unifont.pickle']
     missing=[name for name in required if not (MODEL/name).is_file()]
-    if MODEL_PYTHON is None or not MODEL_PYTHON.is_file(): missing.append('model-python')
-    ready=not missing and (MODEL/'model.safetensors').stat().st_size>100_000_000
+    runtime_ready=bool((MODEL_WORKER and MODEL_WORKER.is_file()) or (MODEL_PYTHON and MODEL_PYTHON.is_file()))
+    if not runtime_ready: missing.append('model-runtime')
+    from .model_setup import assets_ready
+    verified=assets_ready(MODEL)
+    if not verified and not missing:missing.append('model-assets-unverified')
+    ready=not missing and verified
     probe=model_probe_path()
     tested=read(probe) if probe.exists() else None
-    return {'name':'VATr++','ready':ready,'device':'cpu','missing':missing,
+    return {'name':'VATr++','ready':ready,'runtime_ready':runtime_ready,'bundled_runtime':bool(MODEL_WORKER and MODEL_WORKER.is_file()),'device':'cpu','missing':missing,
             'inference_verified':bool(tested and tested.get('status')=='passed'),
-            'description':'此桌面包未包含少样本模型运行环境；可导入已核对字迹档案使用样本习惯适配，或配置外部模型环境。' if MODEL_PYTHON is None else '少样本生成实验版；本人相似度与文字准确性需要人工核对。'}
+            'description':'请使用完整安装包准备本地 AI，或导入已核对字迹档案。' if not runtime_ready else '少样本生成实验版；本人相似度与文字准确性需要人工核对。'}
 
 @asynccontextmanager
 async def lifespan(app):
@@ -96,11 +101,50 @@ async def local_session(request:Request,call_next):
     return response
 
 @app.get('/api/session')
-def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.2.0-web-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
+def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.3.0-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')
 def prompt(): return {'id':'english-numbers-v1','lines':PROMPT_LINES,'instructions':'自然书写，不必刻意工整。深色笔、浅色纸，每句话一行，保持行间距；拍摄整段，避免阴影和反光。'}
+
+@app.post('/api/documents/markdown',status_code=201)
+async def import_markdown(file:UploadFile=File(...)):
+    from .markdown_document import decode_markdown_upload,parse_markdown
+    try:
+        filename=file.filename or 'document.md'
+        parsed=parse_markdown(decode_markdown_upload(await file.read(256*1024+1),filename),filename)
+    except ValueError as error:
+        raise HTTPException(422,'Markdown 导入失败：'+str(error)) from error
+    document_id=uuid.uuid4().hex
+    parsed.update(id=document_id,imported_at=now(),source_sha256=hashlib.sha256(parsed['source_text'].encode('utf-8')).hexdigest())
+    write(DATA/'documents'/f'{document_id}.json',parsed)
+    return parsed
+
+@app.get('/api/setup/model')
+def setup_state():
+    from .model_setup import state
+    return {**state(MODEL),'runtime_ready':model_status()['runtime_ready']}
+
+@app.post('/api/setup/model',status_code=202)
+def prepare_ai():
+    from .model_setup import start
+    if not model_status()['runtime_ready']:
+        raise HTTPException(409,'请安装包含本地 AI 的完整安装包，再准备模型。')
+    return start(MODEL)
+
+@app.get('/api/onboarding')
+def onboarding():
+    all_profiles=profiles()
+    ready=[p for p in all_profiles if p.get('status')=='ready']
+    prepared=[p for p in ready if p.get('habit_model') or p.get('reference_bank')]
+    model=model_status()
+    reviewed=any(read(path).get('status')=='reviewed' for path in (DATA/'jobs').glob('*/job.json'))
+    return {'model':model,'profiles_ready':len(ready),'prepared_profiles':len(prepared),
+            'can_generate':bool(prepared or (ready and model['ready'])),
+            'steps':[{'id':'model','done':model['ready'],'needed':not bool(prepared)},
+                     {'id':'sample','done':bool(ready),'needed':True},
+                     {'id':'review','done':reviewed,'needed':True}],
+            'message':'准备本地 AI，写一段样本，检查第一份试写。样本与生成内容保存在本机。'}
 @app.get('/api/prompt.pdf')
 def prompt_pdf():
     path=DATA/'sampling-guide.pdf'
@@ -175,11 +219,17 @@ class Generation(BaseModel):
     render_mode:Literal['model','model-calibrated','reference','learned-habits']='model'
     math_enabled:bool=False
     allow_supplemental_math:bool=False
+    document_id:str|None=None
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
     text=body.text.replace('\r\n','\n').replace('\r','\n').replace('\t','    ')
     if not text.strip():raise HTTPException(422,'请输入需要生成的英文或数字。')
+    imported_document=None
+    if body.document_id:
+        document_path=DATA/'documents'/f'{identifier(body.document_id)}.json'
+        if not document_path.is_file():raise HTTPException(404,'导入的 Markdown 文档不存在，请重新选择文件。')
+        imported_document=read(document_path)
     rgb=[int(body.ink[i:i+2],16) for i in (1,3,5)]
     if sum(a*b for a,b in zip(rgb,(.2126,.7152,.0722)))>200:raise HTTPException(422,'墨色太浅，请选择深色以保证字迹可读。')
     bank=None;bank_path=None
@@ -220,7 +270,7 @@ def generate(body:Generation):
         if len(active)>=3:raise HTTPException(429,'已有三个任务等待处理，请稍后提交。')
         jid=uuid.uuid4().hex;dest=DATA/'jobs'/jid
         job={'id':jid,'profile_id':body.profile_id,'profile_name':profile['name'],'created_at':now(),
-             'status':'queued','message':'等待生成','text':text,'preferences':body.model_dump(exclude={'profile_id','text'}),
+             'status':'queued','message':'等待生成','text':text,'preferences':body.model_dump(exclude={'profile_id','text','document_id'}),
              'content_verification':'needs-human-review','similarity':'not-evaluated'}
         paths=[str(folder/'sample'/profile['sample']['lines'][i]['file']) for i in profile['selected_lines']]
         cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2'+body.render_mode+(hashlib.sha256(bank_path.read_bytes()).hexdigest() if bank_path else '')).encode()).hexdigest()[:20]
@@ -233,8 +283,15 @@ def generate(body:Generation):
         try:request['expected_input_hashes']=request_input_hashes(request)
         except (OSError,ValueError) as error:raise HTTPException(409,'生成输入已变化，请重新提交。') from error
         write(dest/'job.json',job)
+        if imported_document:
+            job['document_source']={'id':body.document_id,'filename':imported_document['filename'],
+                'source_sha256':imported_document['source_sha256'],'parser_version':imported_document.get('parser_version'),
+                'edited_after_import':text!=imported_document['text'],'warnings':imported_document['warnings']}
+            (dest/'source.md').write_bytes(imported_document['source_text'].encode('utf-8'))
+            write(dest/'document.json',imported_document)
+            write(dest/'job.json',job)
         write(dest/'request.json',request)
-        profile['preferences']=body.model_dump(exclude={'profile_id','text'})
+        profile['preferences']=body.model_dump(exclude={'profile_id','text','document_id'})
         write(folder/'profile.json',profile)
         POOL.submit(run_job,jid)
     return job
@@ -274,7 +331,7 @@ def job(jid:str):return read(job_path(jid)/'job.json')
 @app.get('/api/jobs/{jid}/files/{file}')
 def job_file(jid:str,file:str):
     folder=job_path(jid)
-    if file not in ('result.pdf','report.json','layout.json') and not re.fullmatch(r'page-\d{3}\.png',file):raise HTTPException(404,'文件不存在。')
+    if file not in ('result.pdf','report.json','layout.json','source.md','document.json') and not re.fullmatch(r'page-\d{3}\.png',file):raise HTTPException(404,'文件不存在。')
     path=folder/file
     if not path.is_file():raise HTTPException(404,'文件尚未生成。')
     return FileResponse(path,filename='inkself-handwriting.pdf' if file=='result.pdf' else None)

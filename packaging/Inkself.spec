@@ -2,6 +2,7 @@
 """Windows directory bundle. Choose destinations with --distpath / --workpath."""
 import json
 import os
+import ssl
 from pathlib import Path
 import sys
 
@@ -16,8 +17,14 @@ datas = [(str(path), str(path.parent.relative_to(ROOT)))
          for pattern in ('web/*.py', 'web/runtime/*.py')
          for path in sorted(ROOT.glob(pattern))]
 datas += [(str(ROOT / 'web/static'), 'web/static')]
+datas += [(str(ROOT / 'web/model-assets.json'), 'web')]
 datas += [(str(ROOT / 'scripts/import_desktop_profiles.py'), 'scripts')]
 datas += collect_data_files('reportlab', excludes=['**/tests/**'])
+# Some managed Python runtimes require this TLS policy resource when creating
+# any SSLContext. Preserve their behavior in the bundle instead of patching SSL.
+tls_policy = Path(ssl.__file__).with_name('codex-rejected-cas.pem')
+if tls_policy.is_file():
+    datas += [(str(tls_policy), '.')]
 
 hiddenimports = (collect_submodules('web') + collect_submodules('web.runtime')
                  + collect_submodules('python_multipart'))

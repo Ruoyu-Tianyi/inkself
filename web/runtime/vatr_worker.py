@@ -40,7 +40,7 @@ def renderer_provenance(request,inputs):
     names=['vatr_worker.py']
     if mode!='model':names.append('reference_renderer.py')
     if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
-    if request.get('math_enabled'):names.extend(['math_syntax.py','math_renderer.py','math_glyphs.py','document_input.py'])
+    if request.get('math_enabled'):names.extend(['math_syntax.py','math_renderer.py','math_strokes.py','math_glyphs.py','document_input.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,

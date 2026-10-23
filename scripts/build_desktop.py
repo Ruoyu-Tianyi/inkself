@@ -361,6 +361,8 @@ def copy_offline_guides(bundle):
         ('math-and-documents.md', 'math-and-documents.md'),
         ('experiment-workflow.md', 'experiment-workflow.md'),
         ('habit-adapter.md', 'habit-adapter.md'),
+        ('markdown-import.md', 'markdown-import.md'),
+        ('ai-workflow.md', 'ai-workflow.md'),
     ):
         source = ROOT / 'docs' / source_name
         text = source.read_text(encoding='utf-8')

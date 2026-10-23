@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "repository": "blowing-up-groundhogs/vatrpp",
+  "revision": "fb73be2be8e96ce70d9cad9675a30667e19ac376",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 5832,
+      "sha256": "09a69a1bba3e19621b366d9146062723c11ab3808d1a295c457eefa2edc76ffd"
+    },
+    {
+      "path": "__init__.py",
+      "size": 82,
+      "sha256": "af4963a4a7f46301cf9b8edee04ac4482c2908c8151dae30496adeb7ad517a36"
+    },
+    {
+      "path": "config.json",
+      "size": 1628,
+      "sha256": "9761e81c340a1aeca9e881b828c911787c3767add89d0b747cda9f13d6055833"
+    },
+    {
+      "path": "configuration_vatrpp.py",
+      "size": 3111,
+      "sha256": "da7778173f44c49915bc8ffd033903ebfc385401528e0374b61f96b0a7f29753"
+    },
+    {
+      "path": "create_style_sample.py",
+      "size": 733,
+      "sha256": "ec80715948d6e22a8a26c8666f07f9a4cc954aecc4e588ffb21c72fde4447980"
+    },
+    {
+      "path": "data/create_data.py",
+      "size": 16570,
+      "sha256": "f14569920c6c7a3d2904101413bb73cc9f7d5b975364cea4f3f64724edf87840"
+    },
+    {
+      "path": "data/dataset.py",
+      "size": 11909,
+      "sha256": "498db3be214cd330c43330d62f94f78ed84d26246b11ee2375433ceb17009daf"
+    },
+    {
+      "path": "data/iam_test.py",
+      "size": 1691,
+      "sha256": "ce1bbb17b8ed9bf109fdb9caf8bf9823394047413df6b940729654a714a0b68f"
+    },
+    {
+      "path": "data/show_dataset.py",
+      "size": 4610,
+      "sha256": "9706cb52b6835f1c13027bdfbdbac2892f9ae80aeaf03a3bf3b794b44b120e03"
+    },
+    {
+      "path": "files/english_words.txt",
+      "size": 4862992,
+      "sha256": "3797c8dd6adf523e6c1ac8fbb59a7aec6fbc69d723a4af62972eda2e33ec331f"
+    },
+    {
+      "path": "files/unifont.pickle",
+      "size": 16978300,
+      "sha256": "0804979068f0d169b343fbe0fe8d7ff478165d07a671fcf52e20f625db8e7f9f"
+    },
+    {
+      "path": "generate.py",
+      "size": 2306,
+      "sha256": "f54700152b3345d05576a3f28aed5578670b558d0cd4bee0b0e45aa6f700ffe5"
+    },
+    {
+      "path": "generate/__init__.py",
+      "size": 224,
+      "sha256": "378f0aaf4cfb83eb2149a99acc89a5fb0ff59341373fde50b9dadbaf05f045a2"
+    },
+    {
+      "path": "generate/authors.py",
+      "size": 1489,
+      "sha256": "a3dbdbd4f32c0ee99703770c532e208170e958b2e8e835d242846ae960d5354d"
+    },
+    {
+      "path": "generate/fid.py",
+      "size": 2757,
+      "sha256": "599dbd6fe2ce885d0d3ccc880a7458e767640924c73fe3ff5061eee48964af39"
+    },
+    {
+      "path": "generate/ocr.py",
+      "size": 2567,
+      "sha256": "55ff26b0c1b74d436dbbefb5d8c8f533917e9e15e6a6eed02e629e0a5a0845cf"
+    },
+    {
+      "path": "generate/page.py",
+      "size": 1898,
+      "sha256": "2ebe52acd89c8faf104423ec877e5ceee47834148ca6426a1740c1ccf7f9e44b"
+    },
+    {
+      "path": "generate/text.py",
+      "size": 801,
+      "sha256": "a78ec636d6ebd80d206b8bf40c3dba12e624b33aa39246802a068b6abebd4a2e"
+    },
+    {
+      "path": "generate/util.py",
+      "size": 376,
+      "sha256": "42aa9289dbcb1624f0ea65b3c2cf4ee36e7ee3cdc5aad04e715250e117b43fe2"
+    },
+    {
+      "path": "generate/writer.py",
+      "size": 12360,
+      "sha256": "2311f578077f154ee594b92407f7be711849df99228f89fb3448d342fa2d7ef9"
+    },
+    {
+      "path": "modeling_vatrpp.py",
+      "size": 4669,
+      "sha256": "8fb2842826a3b02b08507e285c6b1a300e15efa860eb68152ec7655130f1efae"
+    },
+    {
+      "path": "models/BigGAN_layers.py",
+      "size": 18604,
+      "sha256": "65b18c83db250313c9be87712ce9c594c40b6bb0e54c24b08a94abe15b755a56"
+    },
+    {
+      "path": "models/BigGAN_networks.py",
+      "size": 18826,
+      "sha256": "ca21d988d9d52db4207b890f54c611de01c68a93669b021308e6b37c934e172c"
+    },
+    {
+      "path": "models/OCR_network.py",
+      "size": 6936,
+      "sha256": "d735fe2c0ab442886159e4e9cc41a11da5f2f75ed0477849c8f0619f88497ec2"
+    },
+    {
+      "path": "models/__init__.py",
+      "size": 2965,
+      "sha256": "b00d20dcabcdc5501c47cfa8ce28d79dad5bb75da2e73a229505bb8d2043a4e6"
+    },
+    {
+      "path": "models/blocks.py",
+      "size": 6811,
+      "sha256": "c52dd1190c2e44bb0903e7e343f16511cab168b4caa8ec733b60cf6818630537"
+    },
+    {
+      "path": "models/config.py",
+      "size": 111,
+      "sha256": "7329e896ef9b600c3d08649d33ca1c6a44eccaacf91a30fe9dc02a56c3a4e2ad"
+    },
+    {
+      "path": "models/inception.py",
+      "size": 11675,
+      "sha256": "1c2f23e1c95de053d306a06070897b50019e360c50aa9eedda509dd841693de0"
+    },
+    {
+      "path": "models/model.py",
+      "size": 34933,
+      "sha256": "3ce18273d8718b69ec5504cb7429ba09482786ddfe466571e9fea6621461fd15"
+    },
+    {
+      "path": "models/networks.py",
+      "size": 4731,
+      "sha256": "99e9ae3bb1580370f601546cdf805ec55f63e46b1f40f880ec1bf38f08c902f0"
+    },
+    {
+      "path": "models/positional_encodings.py",
+      "size": 9755,
+      "sha256": "14fa818b31ee4fde9ee00a081e821de6393ac008d96e7d0810bd457d87ba42f7"
+    },
+    {
+      "path": "models/sync_batchnorm/__init__.py",
+      "size": 449,
+      "sha256": "0701e2062245ab6c90b3df6934a21be5c942b44b13c2ebb70695433599af7a15"
+    },
+    {
+      "path": "models/sync_batchnorm/batchnorm.py",
+      "size": 14882,
+      "sha256": "508690ea7b9e2b4c249b9efa56ec669b110298ce814d1c3ebdaa6e580f2d9741"
+    },
+    {
+      "path": "models/sync_batchnorm/batchnorm_reimpl.py",
+      "size": 2383,
+      "sha256": "02c57365a2f00d07a692f5aa39d815f1fa3c70b805f247cf3514be635b177631"
+    },
+    {
+      "path": "models/sync_batchnorm/comm.py",
+      "size": 4449,
+      "sha256": "9d2e776a0398e5ac29ce13d43b7475300f70f409e56f3c38428029000557a57a"
+    },
+    {
+      "path": "models/sync_batchnorm/replicate.py",
+      "size": 3226,
+      "sha256": "4498b873404fce05202d4f891262e249a95733816d3877e3aee3d2401138a6af"
+    },
+    {
+      "path": "models/sync_batchnorm/unittest.py",
+      "size": 746,
+      "sha256": "7f0fdfb71efe0458707a66525e932af4cd58d2c65e8cab42b26ded60a451abb2"
+    },
+    {
+      "path": "models/transformer.py",
+      "size": 11950,
+      "sha256": "b02d8ac43806cba8654dcf91690b3b723e0a58c7187e8743b819357b7c7cc4da"
+    },
+    {
+      "path": "models/unifont_module.py",
+      "size": 2422,
+      "sha256": "ef696758c3687278d12dc0e58881f743ef24e0ac74f13437fdf4bee90d25d194"
+    },
+    {
+      "path": "models/util/__init__.py",
+      "size": 83,
+      "sha256": "7611916cc78ddba4f45651069b6d51a57878b0ce249ad6cffc9e75d62ac23106"
+    },
+    {
+      "path": "models/util/augmentations.py",
+      "size": 10115,
+      "sha256": "fbf5feb01944d6044a95f22017c875f30f495c285c53d724c4fcfbe0d2d4869e"
+    },
+    {
+      "path": "models/util/loading.py",
+      "size": 1829,
+      "sha256": "1a3fbad1fdfbc16629f2ed513fc58a85b77b22d5ec924fb3914c11b88b79421f"
+    },
+    {
+      "path": "models/util/misc.py",
+      "size": 20583,
+      "sha256": "2833cce507be6ab9f06a1f4e40c8e83bb8e6f15126a07381b333800ecf3ed8b1"
+    },
+    {
+      "path": "models/util/text.py",
+      "size": 6419,
+      "sha256": "9f44336a72562d560dad12d2d9c786857e504609bd622a4150e1ef65deedef12"
+    },
+    {
+      "path": "models/util/util.py",
+      "size": 10984,
+      "sha256": "c8658f172c1774df7db9010d17ecf99fed371f2695f633dbb51871dc8ca91989"
+    },
+    {
+      "path": "models/util/vision.py",
+      "size": 4475,
+      "sha256": "b1cb4adaa281da276a2fced09ca5c96e6c393dd4d7244f7bdd84b5ebeecbfe11"
+    },
+    {
+      "path": "mytext.txt",
+      "size": 332,
+      "sha256": "ddeba73585a147733baebbd656d7619e0055283874e433bcefa65551f1d8a7d5"
+    },
+    {
+      "path": "train.py",
+      "size": 7258,
+      "sha256": "777c726bf6895a7411c6bbfa0cf62bdfcd190cd7260796d37dd6556a176215bb"
+    },
+    {
+      "path": "model.safetensors",
+      "size": 560965208,
+      "sha256": "3b1e4b7cae23652acd5c559117d06ef42fdd5317da2a5e0bc94ea44d8c0eb1ff"
+    }
+  ]
+}

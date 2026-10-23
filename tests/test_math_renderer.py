@@ -169,6 +169,32 @@ class MathematicalLayout(unittest.TestCase):
         self.assertGreaterEqual(ink_count(combined), expected * .98,
                                 'Combined scripts must not erase each other or the base.')
 
+    def test_structural_gestures_repeat_by_seed_and_vary_by_occurrence(self):
+        expression = r'\left(\sqrt{x}\right)+\left(\sqrt{x}\right)'
+        image, metadata = self.render(expression,seed=13,variant=2,allow_supplemental=True)
+        again, repeated = self.render(expression,seed=13,variant=2,allow_supplemental=True)
+        self.assertEqual((image.size,image.tobytes(),metadata),(again.size,again.tobytes(),repeated))
+        self.assertEqual(metadata['renderer'],'personal-math-layout-2')
+        roots = [item for item in metadata['math_strokes'] if item['kind']=='radical']
+        self.assertEqual(len(roots),2)
+        self.assertNotEqual(roots[0]['variation_id'],roots[1]['variation_id'])
+        self.assertEqual(set(metadata['supplemental_math_glyphs']),set('()'))
+        self.assert_clear_bounds(image,metadata)
+
+    def test_reviewed_delimiter_references_are_preserved_and_not_supplemented(self):
+        image = Image.new('L',(16,30),255)
+        ImageDraw.Draw(image).line([(12,2),(3,3),(3,26),(11,27)],fill=20,width=2)
+        source = self.root/'personal-bracket.png';image.save(source)
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        self.bank['glyphs']['['] = {'file':source.name,'sha256':digest,'baseline':25,'advance':18}
+        result,metadata = self.render(r'\left[\frac{x}{y}\right.',allow_supplemental=False)
+        self.assert_clear_bounds(result,metadata)
+        self.assertIn(digest,metadata['references'])
+        self.assertEqual(metadata['supplemental_math_glyphs'],[])
+        fence = [item for item in metadata['math_strokes'] if item['kind']=='fence'][0]
+        self.assertEqual(fence['source'],'personal')
+        self.assertEqual(fence['method'],'reviewed-delimiter-centreline')
+
 
 if __name__ == '__main__':
     unittest.main()

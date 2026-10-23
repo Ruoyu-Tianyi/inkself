@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "mode": "installed",
+  "data_location": "local-appdata",
+  "data_subdirectory": "Inkself/data"
+}

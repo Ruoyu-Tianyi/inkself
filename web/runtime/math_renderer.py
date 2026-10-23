@@ -1,12 +1,11 @@
 """Layout a safe mathematical AST using personal glyphs and declared supplements."""
 from dataclasses import dataclass
-import math
 
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw
 
 SCALE = 3
-VERSION = 'personal-math-layout-1'
+VERSION = 'personal-math-layout-2'
 
 
 @dataclass
@@ -36,10 +35,13 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
     from .habit_model import habit_token
     from .reference_renderer import reference_token
     from .math_glyphs import supplemental_glyph
+    from .math_strokes import draw_fence,draw_radical,estimate_style
     supplemental = set()
     references = set()
     counter = 0
     placements = []
+    structural_strokes = []
+    style = estimate_style(bank,SCALE)
 
     def glyph(char):
         nonlocal counter
@@ -122,18 +124,14 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
             if sub:image.paste(sub.image,(base.image.width+3,sub_y-top))
             return Box(image,base.baseline-top)
         if kind=='radical':
-            body=render(node['body'],depth+1);gap=7;hook=10*SCALE;pad=4
+            body=render(node['body'],depth+1)
             index=_scaled(render(node['index'],depth+1),.55) if node.get('index') else None
-            top=max(pad,index.image.height-4 if index else 0)
-            root_x=max(0,index.image.width-hook*2//3) if index else 0
-            height=body.image.height+top+pad
-            width=root_x+hook+body.image.width+gap+pad
-            image=Image.new('L',(width,height),255);draw=ImageDraw.Draw(image)
-            image.paste(body.image,(root_x+hook+gap,top+pad))
-            draw.line([(root_x+2,round(height*.58)),(root_x+hook//3,round(height*.51)),(root_x+hook*2//3,height-3),(root_x+hook,top),(width-2,top)],fill=35,width=3,joint='curve')
+            image,body_xy,index_xy,stroke_meta=draw_radical(body.image.size,index.image.size if index else None,style,seed,variant*10000+len(structural_strokes))
+            image.paste(body.image,body_xy)
             if index:
-                layer=Image.new('L',image.size,255);layer.paste(index.image,(0,0));image=ImageChops.darker(image,layer)
-            return Box(image,body.baseline+top+pad)
+                layer=Image.new('L',image.size,255);layer.paste(index.image,index_xy);image=ImageChops.darker(image,layer)
+            structural_strokes.append({'kind':'radical',**stroke_meta})
+            return Box(image,body.baseline+body_xy[1])
         if kind=='fence':
             body=render(node['body'],depth+1);height=body.image.height+8
             parts=[]
@@ -142,10 +140,11 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
                     parts.append(Box(body.image,body.baseline));continue
                 if not char:continue
                 delim=glyph(char)
-                factor=height/max(1,delim.image.height)
-                width=max(3,round(delim.image.width*math.sqrt(factor)))
-                im=delim.image.resize((width,height),Image.Resampling.LANCZOS)
-                parts.append(Box(im,body.baseline+4))
+                im,stroke_meta=draw_fence(char,height,style,seed,variant*10000+counter,
+                    source=delim.image if char in bank['glyphs'] else None)
+                structural_strokes.append({'kind':'fence','glyph':char,
+                    'source':'personal' if char in bank['glyphs'] else 'supplemental',**stroke_meta})
+                parts.append(Box(im,body.baseline+4+stroke_meta['top_padding_px']))
             return _join(parts,gap=3)
         raise ValueError('Unsupported math node: '+str(kind))
 
@@ -156,4 +155,5 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
     return image,{'baseline':box.baseline+pad,'em_height':96,'renderer':VERSION,
         'supplemental_math_glyphs':sorted(supplemental),'references':sorted(references),
         'math_glyphs':placements,'math_ast':ast,
+        'math_strokes':structural_strokes,
         'limits':'Structure is typeset from explicit math input; supplemental glyphs are not learned personal handwriting.'}

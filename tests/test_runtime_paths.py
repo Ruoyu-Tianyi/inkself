@@ -88,6 +88,22 @@ class RuntimePaths(unittest.TestCase):
             self.assertEqual(response['instance_id'], 'desktop-instance-test')
             self.assertEqual(response['mode'], 'local-single-owner')
 
+    def test_bundled_neural_worker_needs_no_external_python(self):
+        request=self.root/'request.json'
+        worker=self.root/'ai-runtime/InkselfAI.exe'
+        worker.parent.mkdir();worker.write_bytes(b'fixture')
+        with self.frozen():
+            self.assertEqual(paths.model_worker(),worker)
+            self.assertEqual(paths.worker_command(request,'model'),[str(worker),'--worker',str(request)])
+            self.assertEqual(paths.worker_command(request,'model',python=self.root/'legacy/python.exe'),
+                [str(self.root/'legacy/python.exe'),str(self.root/'resources/web/runtime/vatr_worker.py'),str(request)])
+
+    def test_installed_storage_stays_outside_program_files(self):
+        (self.root/'installed-mode.json').write_text('{"mode":"installed"}')
+        with self.frozen(),patch.dict(os.environ,{'LOCALAPPDATA':str(self.root/'LocalData')}):
+            self.assertEqual(paths.data_root(),self.root/'LocalData/Inkself/data')
+            self.assertEqual(paths.model_root(),self.root/'LocalData/Inkself/data/models/vatrpp')
+
 
 if __name__ == '__main__':
     unittest.main()

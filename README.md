@@ -1,6 +1,6 @@
 # Inkself
 
-Few-shot handwriting imitation from a short reference sample, with a local web studio and Windows desktop preview for capture, generation, review and PDF export.
+Few-shot handwriting imitation from a short reference sample, with a local web studio, Windows installer, bundled CPU inference runtime and PDF export.
 
 通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页及 Windows 桌面内测版，真人验收进行中，尚未达到正式发布的质量门槛。**
 
@@ -11,7 +11,9 @@ Few-shot handwriting imitation from a short reference sample, with a local web s
 - 固定版本 VATr++ 预训练生成器的真实离线 CPU 推理，可生成样本之外的新词句及数字。
 - 原图对照、A4 预览、PDF 下载、历史作品和人工评价。
 - 长文按完整行规划分页，尽量保留题号、公式与解释，减少段落孤行，并按页输出。习惯适配/字形保真上限为 20,000 字符。
-- 数学输入支持行内/独立公式、上下标、分式、根号、嵌套括号、求和、积分和希腊字母；缺失数学字形须明确允许使用配套手写字形。
+- 数学输入支持行内/独立公式、上下标、分式、根号、嵌套括号、求和、积分和希腊字母；括号与根号参考样本笔宽、倾斜和轻微变化绘制，缺失数学字形须明确允许使用配套手写字形。
+- Markdown 文件导入：本机解析标题、段落、列表、强调和公式，预览后直接生成；保存原文及转换提示。
+- Windows 当前用户安装器和独立本地 AI 引擎，首次一键下载并校验固定模型；无需用户配置 Python 或 API 密钥，升级及卸载保留个人数据。
 - 可复用的批量对照流程：固定测试文本、输入快照、模型/代码指纹、HTML 对照页与逐文件复现校验。
 - 实验性样本习惯适配：从人工核对的词图拟合共享字母尺寸、部分正文异体字、抬笔与连接统计；可将部分规则应用到未见新词。
 - 习惯适配中的符号变化：校正过大的百分号和过粗斜线，加入可复现的轻微形状变化，并保护小字号的小数点、冒号与百分号圆圈。
@@ -21,7 +23,16 @@ Few-shot handwriting imitation from a short reference sample, with a local web s
 
 ## 快速开始
 
-Windows，Python **3.10–3.12**：
+Windows 普通用户使用完整安装版 **Inkself-Setup.exe**：
+
+1. 安装并启动 Inkself，点击“准备本地 AI”。首次从固定模型版本下载约 580 MB 文件，完成校验后可离线使用。
+2. 自然抄写应用提供的英文与数字，拍照上传，检查并确认文字行。
+3. 输入新内容或导入 Markdown，生成试写，对照原图逐字检查。
+4. 下载 PDF，记录内容准确性、字迹相似度与自然程度。
+
+安装版面向 Windows 10/11 的兼容 x64 环境，内置 CPU 推理运行时；完整安装流程仍按内测标准验证。它解决环境配置门槛，尚不代表任意短样本高相似度克隆已通过质量验收。首次下载需要网络，个人样本和文档不会随下载发送。含结构化公式的 Markdown 仍需已核对的个人字形档案，见 [桌面指南](docs/desktop-guide.md)、[Markdown 导入](docs/markdown-import.md) 和 [AI 工作流程](docs/ai-workflow.md)。
+
+开发者也可从源码运行。Windows，Python **3.10–3.12**：
 
 ```powershell
 git clone https://github.com/Ruoyu-Tianyi/inkself.git
@@ -31,21 +42,16 @@ cd inkself
 
 安装后双击 **Start Inkself.cmd**，打开 `http://127.0.0.1:8765`。已安装的电脑无需重复安装。模型和依赖下载需要网络及额外磁盘空间；遵循本机 PowerShell 执行策略，不需要关闭全局保护。
 
-1. 自然抄写网页提供的英文与数字，拍照上传。
-2. 检查文字行，排除印刷文字、杂物和切分错误。
-3. 输入新内容，生成试写，对照原图逐字检查。
-4. 下载 PDF，评价内容准确性、字迹相似度与自然程度。
-
 详细安装、停止服务和排错见 [使用指南](docs/web-guide.md)。
 
-Windows 桌面便携版可通过 `python scripts/build_desktop.py` 构建。解压完整目录后双击 `Inkself.exe`；基础包内置 Python 与字形/数学引擎，不携带个人数据、PyTorch 或神经模型。菜单提供旧档案导入与已有模型环境连接。已核对的个人字形档案可独立离线使用；新用户尚不能仅靠干净基础包自动完成字迹克隆。详见 [桌面使用指南](docs/desktop-guide.md)。
+基础便携包仍可通过 `python scripts/build_desktop.py` 构建，菜单保留旧档案导入与已有模型环境连接；基础包本身不包含 AI 运行时。
 
 ## 验证状态与边界
 
 | 项目 | 状态 |
 | --- | --- |
-| 本地自动测试 | 143 项：142 通过，1 项实际符号链接测试因 Windows 权限跳过 |
-| 真实模型推理 | 已用合成参考样本运行，并验证风格缓存复用 |
+| 本地自动测试 | 最近一次 206 项：205 通过，1 项实际符号链接测试因 Windows 权限跳过 |
+| 真实模型推理 | 源码环境及独立 InkselfAI.exe 已实际生成，验证缓存复用、完整结果与任务日志；不代表相似度通过 |
 | 网页流程 | 已试跑上传、确认、生成、预览和 PDF；检查过桌面/手机宽度布局 |
 | 本人相似度与真人泛化 | **验收进行中，尚无通过结论** |
 | 全面内容准确性 | **尚未全面验收；习惯适配已补充数字/符号回归检查，默认模型仍可能误写** |
@@ -65,6 +71,8 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 
 - `web/`：网页、本地 API、样本处理和 VATr++ 推理适配器。
 - `scripts/setup_model.py`：固定版本模型资产下载与大文件哈希检查。
+- `web/model_setup.py`、`web/model-assets.json`：首次使用下载、断点续传和逐文件校验。
+- `ai_worker.py`、`packaging/`、`scripts/build_*.py`：独立 AI 运行时、便携程序和当前用户安装器；公共安装包不嵌入模型权重。
 - `engines/glyphs/`：逐字采样和确定性字形复用工具，用作辅助及对照，不属于网页的少样本生成模型。
 - `tests/`：合成样本及接口测试，不代表真人相似度通过。
 
@@ -76,7 +84,7 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 
 ## 模型、数据与隐私
 
-网页使用 [VATr++](https://huggingface.co/blowing-up-groundhogs/vatrpp) 固定版本生成器；来源、许可与适配方式见 [第三方模型说明](docs/model-notice.md)。权重及下载的上游代码保存在忽略的 `.local/`，未随本仓库重新分发。
+网页使用 [VATr++](https://huggingface.co/blowing-up-groundhogs/vatrpp) 固定版本生成器；来源、许可与适配方式见 [第三方模型说明](docs/model-notice.md)。公共安装包内置推理依赖，不内嵌权重、上游模型代码或字符原型；首次由用户操作从模型来源下载到本机。它们不随源码仓库推送。
 
 样本、转录、风格缓存、文档及包含完整输入的报告默认只保存在本机，已排除 Git 跟踪。仅使用本人或经授权的样本，不提供签名或身份认证功能。
 
