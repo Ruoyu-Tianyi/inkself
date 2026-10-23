@@ -3,9 +3,51 @@
 Uses only Generator; skips training discriminators, OCR, Inception and optimizers.
 Upstream code/assets remain in .local/vendor, tracked here only by revision/hash.
 """
-import importlib.util,json,os,re,sys,time,types
+import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
+
+RENDERER_VERSION='inkself-runtime-2'
+
+
+def _sha256(path):
+    digest=hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
+    return digest.hexdigest()
+
+
+def request_input_hashes(request):
+    """Content identities only: output locations do not affect reproducibility."""
+    mode=request.get('render_mode','model');hashes={}
+    if mode in ('reference','model-calibrated','learned-habits'):
+        hashes['reference_bank_sha256']=_sha256(request['reference_bank'])
+    if mode=='learned-habits':hashes['habit_model_sha256']=_sha256(request['habit_model'])
+    if mode=='model':hashes['style_images_sha256']=[_sha256(path) for path in request['styles']]
+    return hashes
+
+
+def verify_request_inputs(request):
+    actual=request_input_hashes(request)
+    expected=request.get('expected_input_hashes')
+    if expected is not None and (not isinstance(expected,dict) or expected!=actual):
+        raise ValueError('Handwriting inputs changed after this job was queued; submit it again with the current profile.')
+    return actual
+
+
+def renderer_provenance(request,inputs):
+    mode=request.get('render_mode','model')
+    names=['vatr_worker.py']
+    if mode!='model':names.append('reference_renderer.py')
+    if mode=='learned-habits':names.append('habit_model.py')
+    source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
+    renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
+    identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,
+              'input_hashes':inputs,'renderer_sha256':renderer_hash}
+    return {'renderer_version':RENDERER_VERSION,'renderer_sha256':renderer_hash,
+            'input_hashes':inputs,'input_fingerprint_sha256':hashlib.sha256(
+                json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
+            'queued_inputs_verified':request.get('expected_input_hashes') is not None}
 
 
 def run(request_path):
@@ -17,11 +59,14 @@ def run(request_path):
     from web.runtime.reference_renderer import load_bank,reference_token,calibrate_model_image
     mode=request.get('render_mode','model')
     if mode not in ('model','model-calibrated','reference','learned-habits'):raise ValueError('Unknown handwriting renderer.')
+    input_hashes=verify_request_inputs(request)
     bank=load_bank(request['reference_bank']) if mode in ('model-calibrated','reference','learned-habits') else None
     habit=None
     if mode=='learned-habits':
         from web.runtime.habit_model import load_habits,habit_token
         habit=load_habits(request['habit_model'],bank)
+    if request_input_hashes(request)!=input_hashes:raise ValueError('Handwriting inputs changed while loading the job.')
+    provenance=renderer_provenance(request,input_hashes)
     if mode in ('reference','learned-habits'):
         result=[]
         for token in re.findall(r'\n|[^\s]+',request['text']):
@@ -32,7 +77,7 @@ def run(request_path):
         record={'model':{'name':'Sample-fitted handwriting habits' if habit else 'Reviewed reference words and glyphs','device':'cpu','mode':mode,
                 'limit':habit['limits'] if habit else 'Captured glyph/fragment composition; unseen joins and unseen characters are not learned.',
                 'habit_training_words':len(habit['training_words']) if habit else None,
-                'habit_model_sha256':__import__('hashlib').sha256(Path(request['habit_model']).read_bytes()).hexdigest() if habit else None},
+                'habit_model_sha256':input_hashes.get('habit_model_sha256'),**provenance},
                 'duration_seconds':round(time.monotonic()-started,2),'words':result,
                 'validation':'Reviewed sample label mapping; owner similarity review still required.'}
         (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -120,7 +165,7 @@ def run(request_path):
         # Persist actual encoder output, not a claim of personalized model training.
         np.savez_compressed(output/'style-embedding.npz',style=style.cpu().numpy())
     record={'model':{'name':'VATr++','repository':'blowing-up-groundhogs/vatrpp',
-             'revision':'fb73be2be8e96ce70d9cad9675a30667e19ac376','device':'cpu','generator_only':True,'mode':mode,'numeric_source':'reviewed reference glyphs' if bank else 'generative model'},
+             'revision':'fb73be2be8e96ce70d9cad9675a30667e19ac376','device':'cpu','generator_only':True,'mode':mode,'numeric_source':'reviewed reference glyphs' if bank else 'generative model',**provenance},
             'duration_seconds':round(time.monotonic()-started,2),'style_patches':len(chunks),
             'style_cache_used':cache_used,'words':result,
             'validation':'not OCR verified; human review required'}

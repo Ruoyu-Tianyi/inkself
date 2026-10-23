@@ -21,8 +21,24 @@ def family(char):
 
 def pair_evidence(model,pair):
  if pair in model['pairs']:return model['pairs'][pair]
+ if not pair.islower():return [0,0]
  counts=model.get('family_pairs',{}).get(family(pair[0])+':'+family(pair[1]),[0,0]) if len(pair)==2 else [0,0]
  return counts if counts[1]>=3 else [0,0]
+
+def should_connect(model,pair):
+ yes,total=pair_evidence(model,pair)
+ if not pair.isalpha() or total<2:return False
+ threshold=.75 if pair in model['pairs'] else .8
+ return yes>=2 and yes/total>=threshold
+
+def continuous_bridge(ink,x):
+ """Only one connected component spanning the local cut is positive evidence."""
+ import cv2
+ left=max(0,x-2);right=min(ink.shape[1],x+3)
+ if right-left<5:return False
+ _,labels=cv2.connectedComponents(ink[:,left:right].astype('uint8'),8)
+ shared=(set(labels[:,0])- {0}) & (set(labels[:,-1])-{0})
+ return bool(shared)
 
 def features(char):
  return np.array([1.,char.isupper(),char in 'iljtfr',char in 'mwMW',char in 'bdfhkltABCDEFGHIJKLMNOPQRSTUVWXYZ',char in 'gjpqy',char in 'aceosuvxz'],float)
@@ -65,6 +81,13 @@ def align_words(bank):
    value,bounds=dp[width];records.append({'text':word,'bounds':[0]+bounds,'cost':value/len(word)})
  return records
 
+def usable_allograph(raster,prototype):
+ """Reject collapsed or overfilled aggregates; retain the reviewed scaffold."""
+ original=np.asarray(prototype.resize((raster.shape[1],raster.shape[0]),Image.Resampling.LANCZOS))
+ reference_ink=np.mean(original<170)
+ ratio=float(np.mean(raster<170)/max(reference_ink,1e-8))
+ return .55<=ratio<=1.6
+
 def fit_habits(bank,alignments,excluded=HOLDOUTS):
  """Alignment boundaries are estimates; reject uncertain dense-stem cuts."""
  import cv2
@@ -98,7 +121,7 @@ def fit_habits(bank,alignments,excluded=HOLDOUTS):
    # A thin bridge across a plausible split is evidence; dense cuts are uncertain.
    column=np.where(ink[:,x])[0];left=np.where(ink[:,max(0,x-2)])[0];right=np.where(ink[:,min(a.shape[1]-1,x+2)])[0]
    if len(column)>7:continue
-   joined=bool(len(column)>0 and len(left)>0 and len(right)>0)
+   joined=bool(len(column)>0 and len(left)>0 and len(right)>0 and continuous_bridge(ink,x))
    key=word[i:i+2];counts=pairs.setdefault(key,[0,0]);counts[0]+=int(joined);counts[1]+=1
    if joined:
     bridge_y.setdefault(key,[]).append(float(np.mean(column)-rec['baseline']))
@@ -115,12 +138,14 @@ def fit_habits(bank,alignments,excluded=HOLDOUTS):
  family_pairs={}
  for pair,(yes,total) in pairs.items():
   key=family(pair[0])+':'+family(pair[1]);counts=family_pairs.setdefault(key,[0,0]);counts[0]+=yes;counts[1]+=total
- allographs={}
+ allographs={};rejected_allographs=[]
  for char,samples in allograph_samples.items():
   if len(samples)<5:continue
   raster=np.clip(np.median(samples,axis=0),0,255).astype('uint8')
+  if not usable_allograph(raster,_image(bank,bank['glyphs'][char])):
+   rejected_allographs.append(char);continue
   allographs[char]={'width':raster.shape[1],'height':raster.shape[0],'values':raster.flatten().tolist(),'observations':len(samples)}
- return {'family_pairs':family_pairs,'allographs':allographs,'schema_version':VERSION,'method':'sample-fitted shared character geometry and observed pen-lift statistics',
+ return {'fit_version':2,'rejected_allographs':rejected_allographs,'family_pairs':family_pairs,'allographs':allographs,'schema_version':VERSION,'method':'sample-fitted shared character geometry and observed pen-lift statistics',
   'source_sha256':bank['source_sha256'],'baseline_slopes':baseline_slopes,'training_words':records,'excluded_words':sorted(excluded),
   'source_word_hashes':source_hashes,'observations':len(vectors),'width_coefficients':wc,'height_coefficients':hc,
   'width_residual_std':float(np.clip(np.std(residual),0,.1)),'pairs':pairs,
@@ -148,59 +173,54 @@ def load_habits(path,bank):
   if values.size!=raster['width']*raster['height'] or not np.isfinite(values).all() or np.any(values<0) or np.any(values>255):raise ValueError('Invalid learned glyph pixels.')
  return model
 
-def _endpoint(image,baseline,side,target_offset=-5):
- a=np.asarray(image);yy,xx=np.where(a<170)
+def _endpoint(image,baseline,side,target_offset=-5,scale=3):
+ a=np.asarray(image);yy,xx=np.where(a<170);xx=xx/scale;yy=yy/scale
  keep=(yy>=baseline-9)&(yy<=baseline+1)
  if not np.any(keep):return None
- xx=xx[keep];yy=yy[keep];edge=xx.max() if side=='right' else xx.min();m=xx==edge
- values=yy[m];target=baseline+target_offset
- return float(edge),float(values[np.argmin(np.abs(values-target))])
+ xx=xx[keep];yy=yy[keep];edge=xx.max() if side=='right' else xx.min();values=yy[xx==edge]
+ return float(edge),float(values[np.argmin(np.abs(values-(baseline+target_offset)))])
 
 def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
  if missing_characters(bank,text):raise ValueError('Missing reviewed glyphs.')
- # Numeric and punctuation-only tokens remain exact reviewed compositions.
  if not any(c.isalpha() for c in text):return reference_token(bank,text,prefer_words=False)
- # Stable per occurrence: a fitted residual distribution, not fresh page-wide noise.
  digest=hashlib.sha256(f'{seed}:{variant}:{text}'.encode()).digest();rng=np.random.default_rng(int.from_bytes(digest[:8],'little'))
- pieces=[];provenance=[]
+ # Retain learned high-resolution strokes until the final PDF compositor resamples.
+ scale=3;pieces=[];provenance=[]
  for char in text:
-  rec=bank['glyphs'][char];im=_image(bank,rec);wx=hy=1.
+  rec=bank['glyphs'][char];im=_image(bank,rec);native_w,native_h=im.size;wx=hy=1.
   if allographs and char in model.get('allographs',{}):
-   raster=model['allographs'][char];im=Image.fromarray(np.asarray(raster['values'],dtype='uint8').reshape(raster['height'],raster['width'])).resize(im.size,Image.Resampling.LANCZOS)
+   raster=model['allographs'][char];im=Image.fromarray(np.asarray(raster['values'],dtype='uint8').reshape(raster['height'],raster['width']))
   if char.isalpha():
    wx=float(np.clip(features(char)@model['width_coefficients'],.4,1.1));hy=float(np.clip(features(char)@model['height_coefficients'],.55,1.15))
-   # Residual is bounded and small; numerals and punctuation never deformed.
    wx*=float(np.clip(1+rng.normal(0,model['width_residual_std']*.18),.97,1.03))
-  im=im.resize((max(2,round(im.width*wx)),max(2,round(im.height*hy))),Image.Resampling.LANCZOS)
+  # Nonletters keep their original dimensions, including one-pixel punctuation.
+  im=im.resize((max(1,round(native_w*wx*scale)),max(1,round(native_h*hy*scale))),Image.Resampling.LANCZOS)
   base=float(rec['baseline'])*hy;pieces.append((char,im,base));provenance.append(rec['sha256'])
- baseline=math.ceil(max(p[2] for p in pieces))+4;height=baseline+math.ceil(max(im.height-base for _,im,base in pieces))+4
- positions=[];x=4.
- slope=.35*float(rng.choice(model.get('baseline_slopes') or [0]))
+ baseline=math.ceil(max(p[2] for p in pieces))+4
+ height=baseline+math.ceil(max(im.height/scale-base for _,im,base in pieces))+4
+ positions=[];x=4.;slope=.35*float(rng.choice(model.get('baseline_slopes') or [0]))
  for i,(char,im,base) in enumerate(pieces):
-  positions.append((round(x),round(baseline-base)))
-  # Learn whether to bring letter bodies close enough for an observed join.
-  pair=text[i:i+2];counts=pair_evidence(model,pair);prob=(counts[0]+.3)/(counts[1]+1.)
-  gap=0 if counts[1] and prob>=.5 else 1
+  positions.append((x,baseline-base));pair=text[i:i+2]
+  gap=0 if should_connect(model,pair) else 1
   if not char.isalpha() or (i+1<len(text) and not text[i+1].isalpha()):gap=3
-  x+=im.width+gap
- positions=[(px,py+round(float(np.clip(slope*(px-x/2),-.8,.8)))) for px,py in positions]
- result=Image.new('L',(math.ceil(x)+4,height),255)
- # Darken composition: overlapping white margins cannot erase existing strokes.
- for (_,im,_),(x,y) in zip(pieces,positions):
-  layer=Image.new('L',result.size,255);layer.paste(im,(x,y));result=ImageChops.darker(result,layer)
+  x+=im.width/scale+gap
+ positions=[(px,py+float(np.clip(slope*(px-x/2),-.8,.8))) for px,py in positions]
+ result=Image.new('L',((math.ceil(x)+4)*scale,height*scale),255)
+ for (_,im,_),(px,py) in zip(pieces,positions):
+  layer=Image.new('L',result.size,255);layer.paste(im,(round(px*scale),round(py*scale)));result=ImageChops.darker(result,layer)
  joined=[];draw=ImageDraw.Draw(result)
  if connect:
   for i in range(len(pieces)-1):
-   pair=text[i:i+2];yes,total=pair_evidence(model,pair)
-   if not pair.isalpha() or total<1 or (yes+.3)/(total+1.)<.5:continue
-   _,left,lb=pieces[i];_,right,rb=pieces[i+1];offset=float(model.get('bridge_height_by_pair',{}).get(pair,-5));a=_endpoint(left,lb,'right',offset);b=_endpoint(right,rb,'left',offset)
+   pair=text[i:i+2]
+   if not should_connect(model,pair):continue
+   _,left,lb=pieces[i];_,right,rb=pieces[i+1];offset=float(model.get('bridge_height_by_pair',{}).get(pair,-5))
+   a=_endpoint(left,lb,'right',offset,scale);b=_endpoint(right,rb,'left',offset,scale)
    if a is None or b is None:continue
    x0,y0=positions[i][0]+a[0],positions[i][1]+a[1];x1,y1=positions[i+1][0]+b[0],positions[i+1][1]+b[1]
-   # Reject implausible bridges; pen lifts are preferable to damaged letters.
    if not 0<x1-x0<=7 or abs(y1-y0)>7:continue
-   bow=model['connector_bow_px'];points=[]
-   for t in np.linspace(0,1,20):points.append((x0+t*(x1-x0),y0+t*(y1-y0)+4*bow*t*(1-t)))
-   draw.line(points,fill=45,width=1);joined.append(pair)
- return result,{'baseline':baseline,'em_height':32,'renderer':'sample-fitted-habits','references':provenance,
-  'sampled_baseline_slope':slope,'learned_allographs':[c for c in text if allographs and c in model.get('allographs',{})],'connections_from_generalized_rules':[pair for pair in joined if pair not in model['pairs']],'learned_connections':joined,'habit_observations':model['observations'],
-  'limits':model['limits']}
+   points=[((x0+t*(x1-x0))*scale,(y0+t*(y1-y0)+4*model['connector_bow_px']*t*(1-t))*scale) for t in np.linspace(0,1,32)]
+   draw.line(points,fill=45,width=scale);joined.append(pair)
+ return result,{'baseline':baseline*scale,'em_height':32*scale,'raster_scale':scale,'renderer':'sample-fitted-habits','references':provenance,
+  'sampled_baseline_slope':slope,'learned_allographs':[c for c in text if allographs and c in model.get('allographs',{})],
+  'connections_from_generalized_rules':[pair for pair in joined if pair not in model['pairs']],'learned_connections':joined,
+  'habit_observations':model['observations'],'limits':model['limits']}

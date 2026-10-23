@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image,ImageDraw
 from web.runtime.reference_renderer import load_bank,reference_token
-from web.runtime.habit_model import align_words,fit_habits,habit_token,load_habits,pair_evidence
+from web.runtime.habit_model import align_words,fit_habits,habit_token,load_habits,pair_evidence,should_connect,continuous_bridge,usable_allograph
 
 def fixture(root):
  bank={'schema_version':1,'reviewed':True,'source_sha256':'synthetic','glyphs':{},'words':{}}
@@ -33,7 +33,7 @@ class HabitAdapter(unittest.TestCase):
   self.assertEqual(a.tobytes(),b.tobytes());self.assertEqual(a.size,b.size)
  def test_seed_and_occurrence_reproducible_and_margins_not_clipped(self):
   a,meta=habit_token(self.bank,self.model,'anne',seed=7,variant=4);b,_=habit_token(self.bank,self.model,'anne',seed=7,variant=4)
-  self.assertEqual(a.tobytes(),b.tobytes());self.assertEqual(meta['em_height'],32)
+  self.assertEqual(a.tobytes(),b.tobytes());self.assertEqual(meta['em_height'],96);self.assertEqual(meta['raster_scale'],3)
   pixels=np.asarray(a);self.assertTrue(np.all(pixels[[0,-1],:]==255));self.assertTrue(np.all(pixels[:,[0,-1]]==255))
  def test_family_rules_need_evidence_and_observed_lifts_override(self):
   model={'pairs':{},'family_pairs':{'arch:bowl':[1,1]}}
@@ -68,6 +68,32 @@ class HabitAdapter(unittest.TestCase):
    self.assertEqual(request['render_mode'],'learned-habits');self.assertEqual(request['habit_model'],str(model_path.resolve()))
    profile['habit_model']='../../escape.json';w.write(folder/'profile.json',profile)
    self.assertEqual(client.post('/api/jobs',headers=headers,json=body).status_code,409)
+ def test_disconnected_ink_is_not_training_connection(self):
+  ink=np.zeros((12,7),dtype=bool);ink[2,1:4]=True;ink[9,3:6]=True
+  self.assertFalse(continuous_bridge(ink,3));ink[2,1:6]=True
+  self.assertTrue(continuous_bridge(ink,3))
+ def test_single_observation_and_inferred_capitals_do_not_join(self):
+  model={'pairs':{'an':[1,1]},'family_pairs':{'other:bowl':[9,9],'bowl:arch':[9,9]}}
+  self.assertFalse(should_connect(model,'an'));self.assertFalse(should_connect(model,'Ae'))
+  model['pairs']['an']=[3,3];self.assertTrue(should_connect(model,'an'))
+ def test_nonletter_dimensions_independent_of_surrounding_content(self):
+  im=Image.new('L',(1,1),0);path=self.root/'period.png';im.save(path)
+  rec={'file':'period.png','sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'baseline':1,'advance':3}
+  self.bank['glyphs']['.']=rec;self.bank['glyphs'][',']=rec
+  self.bank['letter_width_scale']=.4
+  numeric,_=reference_token(self.bank,'1,2',False)
+  self.bank['letter_width_scale']=1.2
+  again,_=reference_token(self.bank,'1,2',False)
+  self.assertEqual(numeric.tobytes(),again.tobytes());self.assertEqual(numeric.size,again.size)
+  output,meta=habit_token(self.bank,self.model,'a.')
+  # The trailing dot retains a one-native-pixel footprint, not the old forced 2x2.
+  mask=np.asarray(output)<170;labels=__import__('cv2').connectedComponentsWithStats(mask.astype('uint8'),8)[2][1:]
+  rightmost=max(labels,key=lambda r:r[0]+r[2]);self.assertEqual(tuple(rightmost[2:4]),(3,3))
+  self.assertGreater(meta['baseline'],rightmost[1])
+ def test_aggregated_strokes_cannot_collapse_into_a_blob(self):
+  proto=Image.new('L',(12,20),255);ImageDraw.Draw(proto).line((4,1,4,18),fill=0,width=2)
+  self.assertFalse(usable_allograph(np.zeros((60,36),dtype='uint8'),proto))
+  self.assertTrue(usable_allograph(np.asarray(proto.resize((36,60))),proto))
  def test_missing_characters_fail_without_silent_substitution(self):
   with self.assertRaises(ValueError):habit_token(self.bank,self.model,'unseen!')
 if __name__=='__main__':unittest.main()

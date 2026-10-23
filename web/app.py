@@ -211,13 +211,16 @@ def generate(body:Generation):
         job={'id':jid,'profile_id':body.profile_id,'profile_name':profile['name'],'created_at':now(),
              'status':'queued','message':'等待生成','text':text,'preferences':body.model_dump(exclude={'profile_id','text'}),
              'content_verification':'needs-human-review','similarity':'not-evaluated'}
-        write(dest/'job.json',job)
         paths=[str(folder/'sample'/profile['sample']['lines'][i]['file']) for i in profile['selected_lines']]
         cache_key=hashlib.sha256((profile['sample_sha256']+repr(profile['selected_lines'])+'vatrpp-fb73be2'+body.render_mode+(hashlib.sha256(bank_path.read_bytes()).hexdigest() if bank_path else '')).encode()).hexdigest()[:20]
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
                  'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode}
         if bank_path:request['reference_bank']=str(bank_path)
         if habit_path:request['habit_model']=str(habit_path)
+        from .runtime.vatr_worker import request_input_hashes
+        try:request['expected_input_hashes']=request_input_hashes(request)
+        except (OSError,ValueError) as error:raise HTTPException(409,'生成输入已变化，请重新提交。') from error
+        write(dest/'job.json',job)
         write(dest/'request.json',request)
         profile['preferences']=body.model_dump(exclude={'profile_id','text'})
         write(folder/'profile.json',profile)

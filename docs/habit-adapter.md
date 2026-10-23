@@ -25,3 +25,11 @@ To enable the experimental web mode for a locally reviewed profile, set `referen
 Synthetic tests check exclusion, inference without whole-word lookup, numeric/operator pixel preservation, deterministic occurrence rendering, margins, source/parameter validation and API gating without VATr++ weights. They do not establish personal similarity.
 
 Use identical held-out text, size and ink for reference-versus-adapter comparisons. Include new letter combinations, repeated words, digits and operators. Inspect actual PDFs and obtain owner feedback. Small development word sets or raster-distance metrics are diagnostic only; they must not be advertised as handwriting similarity percentages. Do not make this mode the default on that evidence.
+
+## Renderer integrity improvements
+
+The fitter now requires a connected component crossing a candidate boundary before counting a positive join. Inference requires repeated supporting evidence and stronger agreement for generalized letter families; unobserved capital-letter joins are rejected. Robust glyph aggregates with collapsed or excessively filled stroke masks fall back to the reviewed glyph. These are quality safeguards, not a new neural trajectory model.
+
+Learned rasters and curves remain at three times native resolution through word composition. Baseline and em-height metadata scale together, so PDF physical size remains stable. Nonletters keep their native proportions per character, including grouped numbers, time separators and tiny punctuation inside mixed tokens.
+
+Web jobs capture input hashes when queued. If a bank or fitted adapter changes before execution, the job fails instead of silently using different inputs. Reports include a path-neutral input fingerprint and renderer code fingerprint.

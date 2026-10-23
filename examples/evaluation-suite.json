@@ -1,0 +1,21 @@
+{
+  "name": "English handwriting regression suite v1",
+  "excluded_words": ["quiet", "paid", "new", "fox", "It"],
+  "cases": [
+    {
+      "id": "planning",
+      "title": "Project planning and longer words",
+      "text": "PROJECT NOTES\nOur team will organize a workshop next Thursday.\nPrepare the agenda, confirm attendance, and collect useful questions.\nA clear explanation makes complicated decisions easier to understand."
+    },
+    {
+      "id": "journal",
+      "title": "Unseen narrative and repeated words",
+      "text": "Yesterday, sunlight filled the library while rain covered the garden.\nI enjoyed sketching unusual objects and imagining distant journeys.\nminimum minimum minimum; rhythm rhythm rhythm; yellow yellow yellow.\nWhy do ordinary moments become unforgettable memories?"
+    },
+    {
+      "id": "numeric",
+      "title": "Grouped numbers, time and mixed tokens",
+      "text": "Total: 1,250.75; paid: 900.25; balance: 350.50.\nMeeting: 09:30; room A204; reference B17.\n15% 27+58=85 120-45=75 0.025 100.00\n0123456789 9876543210\nPlease check every digit, decimal point, comma and operator."
+    }
+  ]
+}

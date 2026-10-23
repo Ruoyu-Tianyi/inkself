@@ -61,8 +61,9 @@ def reference_token(bank,text,prefer_words=True):
             offset+=len(fragment)
         else:
             char=text[offset];record=bank['glyphs'][char];image=_image(bank,record)
-            width=max(1,round(image.width*horizontal));image=image.resize((width,image.height),Image.Resampling.LANCZOS)
-            advance=max(width+1,float(record.get('advance',image.width+2))*horizontal)
+            char_scale=horizontal if char.isalpha() else 1.
+            width=max(1,round(image.width*char_scale));image=image.resize((width,image.height),Image.Resampling.LANCZOS)
+            advance=max(width+1,float(record.get('advance',image.width+2))*char_scale)
             pieces.append((image,float(record['baseline']),advance,record['sha256']));offset+=1
     ascent=max(p[1] for p in pieces);descent=max(p[0].height-p[1] for p in pieces)
     baseline=math.ceil(ascent)+2;height=max(4,math.ceil(ascent+descent)+4)
