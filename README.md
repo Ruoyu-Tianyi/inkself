@@ -1,8 +1,8 @@
 # Inkself
 
-Few-shot handwriting imitation from a short reference sample, with a local web studio for capture, generation, review and PDF export.
+Few-shot handwriting imitation from a short reference sample, with a local web studio and Windows desktop preview for capture, generation, review and PDF export.
 
-通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页内测版，真人验收进行中，尚未达到正式发布的质量门槛。**
+通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页及 Windows 桌面内测版，真人验收进行中，尚未达到正式发布的质量门槛。**
 
 ## 当前能力
 
@@ -38,11 +38,13 @@ cd inkself
 
 详细安装、停止服务和排错见 [使用指南](docs/web-guide.md)。
 
+Windows 桌面便携版可通过 `python scripts/build_desktop.py` 构建。解压完整目录后双击 `Inkself.exe`；基础包内置 Python 与字形/数学引擎，不携带个人数据、PyTorch 或神经模型。菜单提供旧档案导入与已有模型环境连接。已核对的个人字形档案可独立离线使用；新用户尚不能仅靠干净基础包自动完成字迹克隆。详见 [桌面使用指南](docs/desktop-guide.md)。
+
 ## 验证状态与边界
 
 | 项目 | 状态 |
 | --- | --- |
-| 本地自动测试 | 120 项通过，覆盖网页与辅助字形引擎 |
+| 本地自动测试 | 143 项：142 通过，1 项实际符号链接测试因 Windows 权限跳过 |
 | 真实模型推理 | 已用合成参考样本运行，并验证风格缓存复用 |
 | 网页流程 | 已试跑上传、确认、生成、预览和 PDF；检查过桌面/手机宽度布局 |
 | 本人相似度与真人泛化 | **验收进行中，尚无通过结论** |

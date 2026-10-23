@@ -16,11 +16,12 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from .samples import process_sample
+from .runtime_paths import data_root,model_root,model_python,model_probe_path,resource_root,worker_command
 
-ROOT=Path(__file__).resolve().parents[1]
-DATA=Path(os.environ.get('INKSELF_DATA',ROOT/'.local/web-data')).resolve()
-MODEL=ROOT/'.local/vendor/vatrpp'
-MODEL_PYTHON=Path(os.environ.get('INKSELF_MODEL_PYTHON',ROOT/'.local/model-env/Scripts/python.exe' if os.name=='nt' else ROOT/'.local/model-env/bin/python'))
+ROOT=resource_root()
+DATA=data_root()
+MODEL=model_root()
+MODEL_PYTHON=model_python()
 PROMPT_LINES=[
     'The quick brown fox jumps over the lazy dog.',
     'Bright mornings bring fresh ideas, quiet thoughts and new beginnings.',
@@ -56,13 +57,13 @@ def job_path(jid):
 def model_status():
     required=['model.safetensors','config.json','models/model.py','files/unifont.pickle']
     missing=[name for name in required if not (MODEL/name).is_file()]
-    if not MODEL_PYTHON.is_file(): missing.append('model-python')
+    if MODEL_PYTHON is None or not MODEL_PYTHON.is_file(): missing.append('model-python')
     ready=not missing and (MODEL/'model.safetensors').stat().st_size>100_000_000
-    probe=ROOT/'.local/model-probe.json'
+    probe=model_probe_path()
     tested=read(probe) if probe.exists() else None
     return {'name':'VATr++','ready':ready,'device':'cpu','missing':missing,
             'inference_verified':bool(tested and tested.get('status')=='passed'),
-            'description':'少样本生成实验版；本人相似度与文字准确性需要人工核对。'}
+            'description':'此桌面包未包含少样本模型运行环境；可导入已核对字迹档案使用样本习惯适配，或配置外部模型环境。' if MODEL_PYTHON is None else '少样本生成实验版；本人相似度与文字准确性需要人工核对。'}
 
 @asynccontextmanager
 async def lifespan(app):
@@ -95,7 +96,7 @@ async def local_session(request:Request,call_next):
     return response
 
 @app.get('/api/session')
-def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.2.0-web-preview'}
+def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.2.0-web-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')
@@ -245,7 +246,7 @@ def run_job(jid):
         job.update(status='running',message='正在生成字迹、公式并规划分页。' if local_layout else '正在运行本地少样本模型，CPU 生成可能需要几分钟。');write(folder/'job.json',job)
         with (folder/'worker.log').open('w',encoding='utf-8') as log:
             env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',MPLBACKEND='Agg',PYTHONPATH='')
-            result=subprocess.run([str(MODEL_PYTHON),str(ROOT/'web/runtime/vatr_worker.py'),str(folder/'request.json')],
+            result=subprocess.run(worker_command(folder/'request.json',job['preferences'].get('render_mode','model'),python=MODEL_PYTHON),
                                   cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1800,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if result.returncode:raise RuntimeError('模型运行失败；诊断日志已保留，请检查模型环境。')
         output=read(folder/'generated.json')

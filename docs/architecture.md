@@ -38,3 +38,9 @@ Inkself 是少样本个人字迹网页应用，当前在本机以单用户服务
 The reference and habit modes preflight content through `runtime/document_input.py`. Opted-in math is parsed by the bounded, non-executing `math_syntax.py` parser. `math_renderer.py` builds baseline-aware boxes from personal rasters and explicitly allowed `math_glyphs.py` supplements; source provenance and the AST are retained. Mathematical structure is not an OCR or symbolic solving service.
 
 `document_layout.py` plans complete lines and semantic keep groups before assigning pages. It then writes one raster page at a time, with positions, baselines, warnings and display-formula scaling in `layout.json`. Experiment fingerprints include parser, glyph, math and document layout code; image/PDF/layout/report files are hashed for replay. Unknown commands and unapproved missing glyphs fail before a job is queued.
+
+## Windows desktop
+
+`desktop.py` dispatches the native window, isolated loopback server and frozen local workers. `desktop_runtime.py` owns the server process tree through a Windows Job Object, verifies a per-launch instance identity, and enforces one controller per data folder. Startup probes use direct loopback HTTP without proxy or TLS configuration. `web/runtime_paths.py` separates read-only bundled resources from portable `data` and optional external neural assets; source development paths remain compatible.
+
+PyInstaller bundles public web sources for renderer fingerprints and optional external Python workers. Core glyph/math workers re-enter `Inkself.exe --worker`, so no system Python is needed. The clean ZIP excludes personal profiles, history and model weights. Explicit profile imports validate relative asset paths and checksums, reject links, skip existing IDs and never copy old absolute job requests. See [desktop guide](desktop-guide.md).

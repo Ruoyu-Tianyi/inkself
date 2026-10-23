@@ -1,0 +1,2 @@
+# Preserve upstream license bytes and their published checksums across platforms.
+packaging/licenses/** -text -whitespace

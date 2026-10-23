@@ -1,0 +1,11 @@
+# Windows desktop runtime; neural inference remains an optional external environment.
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+python-multipart>=0.0.18,<1
+httpx>=0.27,<1
+Pillow>=10.4,<13
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5
+reportlab>=4.2,<5
+pywebview>=6,<7
+PyInstaller>=6.16,<7
