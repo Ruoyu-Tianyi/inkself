@@ -181,13 +181,20 @@ def _endpoint(image,baseline,side,target_offset=-5,scale=3):
  return float(edge),float(values[np.argmin(np.abs(values-(baseline+target_offset)))])
 
 def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
+ from .symbol_style import SYMBOLS,render_symbol,symbol_token,fit_percent_to_canvas
  if missing_characters(bank,text):raise ValueError('Missing reviewed glyphs.')
- if not any(c.isalpha() for c in text):return reference_token(bank,text,prefer_words=False)
+ if not any(c.isalpha() for c in text):
+  if any(c in SYMBOLS for c in text):return symbol_token(bank,text,seed,variant)
+  return reference_token(bank,text,prefer_words=False)
  digest=hashlib.sha256(f'{seed}:{variant}:{text}'.encode()).digest();rng=np.random.default_rng(int.from_bytes(digest[:8],'little'))
  # Retain learned high-resolution strokes until the final PDF compositor resamples.
- scale=3;pieces=[];provenance=[]
- for char in text:
+ scale=3;pieces=[];provenance=[];symbol_variants=[];bearings=[];advances=[]
+ for index,char in enumerate(text):
   rec=bank['glyphs'][char];im=_image(bank,rec);native_w,native_h=im.size;wx=hy=1.
+  if char in SYMBOLS:
+   im,base,meta=render_symbol(bank,char,seed,variant,index)
+   pieces.append((char,im,base));provenance.append(rec['sha256']);symbol_variants.append(meta)
+   bearings.append(meta['left_padding']);advances.append(meta['layout_width']);continue
   if allographs and char in model.get('allographs',{}):
    raster=model['allographs'][char];im=Image.fromarray(np.asarray(raster['values'],dtype='uint8').reshape(raster['height'],raster['width']))
   if char.isalpha():
@@ -195,18 +202,22 @@ def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
    wx*=float(np.clip(1+rng.normal(0,model['width_residual_std']*.18),.97,1.03))
   # Nonletters keep their original dimensions, including one-pixel punctuation.
   im=im.resize((max(1,round(native_w*wx*scale)),max(1,round(native_h*hy*scale))),Image.Resampling.LANCZOS)
-  base=float(rec['baseline'])*hy;pieces.append((char,im,base));provenance.append(rec['sha256'])
+  base=float(rec['baseline'])*hy;pieces.append((char,im,base));provenance.append(rec['sha256']);bearings.append(0.);advances.append(im.width/scale)
  baseline=math.ceil(max(p[2] for p in pieces))+4
  height=baseline+math.ceil(max(im.height/scale-base for _,im,base in pieces))+4
  positions=[];x=4.;slope=.35*float(rng.choice(model.get('baseline_slopes') or [0]))
  for i,(char,im,base) in enumerate(pieces):
-  positions.append((x,baseline-base));pair=text[i:i+2]
+  positions.append((x-bearings[i],baseline-base));pair=text[i:i+2]
   gap=0 if should_connect(model,pair) else 1
   if not char.isalpha() or (i+1<len(text) and not text[i+1].isalpha()):gap=3
-  x+=im.width/scale+gap
+  x+=advances[i]+gap
  positions=[(px,py+float(np.clip(slope*(px-x/2),-.8,.8))) for px,py in positions]
- result=Image.new('L',((math.ceil(x)+4)*scale,height*scale),255)
- for (_,im,_),(px,py) in zip(pieces,positions):
+ result=Image.new('L',((math.ceil(x)+(7 if symbol_variants else 4))*scale,height*scale),255)
+ for index,((char,im,_),(px,py)) in enumerate(zip(pieces,positions)):
+  if char=='%':
+   entry=next(v for v in symbol_variants if v['index']==index)
+   im,checked=fit_percent_to_canvas(bank,im,entry,result.size,(round(px*scale),round(py*scale)),seed,variant)
+   entry.update(checked)
   layer=Image.new('L',result.size,255);layer.paste(im,(round(px*scale),round(py*scale)));result=ImageChops.darker(result,layer)
  joined=[];draw=ImageDraw.Draw(result)
  if connect:
@@ -221,6 +232,7 @@ def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
    points=[((x0+t*(x1-x0))*scale,(y0+t*(y1-y0)+4*model['connector_bow_px']*t*(1-t))*scale) for t in np.linspace(0,1,32)]
    draw.line(points,fill=45,width=scale);joined.append(pair)
  return result,{'baseline':baseline*scale,'em_height':32*scale,'raster_scale':scale,'renderer':'sample-fitted-habits','references':provenance,
+  'symbol_variants':symbol_variants,
   'sampled_baseline_slope':slope,'learned_allographs':[c for c in text if allographs and c in model.get('allographs',{})],
   'connections_from_generalized_rules':[pair for pair in joined if pair not in model['pairs']],'learned_connections':joined,
   'habit_observations':model['observations'],'limits':model['limits']}

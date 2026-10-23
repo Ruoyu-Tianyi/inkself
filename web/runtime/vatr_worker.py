@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-2'
+RENDERER_VERSION='inkself-runtime-3'
 
 
 def _sha256(path):
@@ -39,7 +39,7 @@ def renderer_provenance(request,inputs):
     mode=request.get('render_mode','model')
     names=['vatr_worker.py']
     if mode!='model':names.append('reference_renderer.py')
-    if mode=='learned-habits':names.append('habit_model.py')
+    if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,

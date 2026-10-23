@@ -22,7 +22,7 @@ To enable the experimental web mode for a locally reviewed profile, set `referen
 
 ## Validation
 
-Synthetic tests check exclusion, inference without whole-word lookup, numeric/operator pixel preservation, deterministic occurrence rendering, margins, source/parameter validation and API gating without VATr++ weights. They do not establish personal similarity.
+Synthetic tests check exclusion, inference without whole-word lookup, digit preservation, bounded symbol variation, deterministic occurrence rendering, margins, source/parameter validation and API gating without VATr++ weights. They do not establish personal similarity.
 
 Use identical held-out text, size and ink for reference-versus-adapter comparisons. Include new letter combinations, repeated words, digits and operators. Inspect actual PDFs and obtain owner feedback. Small development word sets or raster-distance metrics are diagnostic only; they must not be advertised as handwriting similarity percentages. Do not make this mode the default on that evidence.
 
@@ -33,3 +33,13 @@ The fitter now requires a connected component crossing a candidate boundary befo
 Learned rasters and curves remain at three times native resolution through word composition. Baseline and em-height metadata scale together, so PDF physical size remains stable. Nonletters keep their native proportions per character, including grouped numbers, time separators and tiny punctuation inside mixed tokens.
 
 Web jobs capture input hashes when queued. If a bank or fitted adapter changes before execution, the job fails instead of silently using different inputs. Reports include a path-neutral input fingerprint and renderer code fingerprint.
+
+## Symbols in the habit renderer
+
+`symbol_style.py` applies small deterministic changes to reviewed punctuation and operators. Seed, token occurrence and character index determine the variant. Digits keep their captured geometry; the reference renderer remains an unchanged control. This is procedural variation, not learned pen pressure, stroke order or additional character recognition.
+
+An oversized percent can be scaled relative to the sample's digits. When two loops and a separate diagonal are unambiguous, an excessively thick slash is rebuilt along its captured centerline at a width derived from the loops. Loop placement and slash curvature vary slightly, alongside bounded rotation, scale and offset. Other symbols vary conservatively; decimal points and colon dots receive minimal contrast/support protection against disappearing during downsampling.
+
+Connected components and holes are checked before accepting a symbol. Percent candidates are also checked as isolated layers at their actual position on a fixed word canvas, across UI font sizes 10–26. Deterministic retries leave digit positions, canvas dimensions and baselines fixed. If no candidate passes, the normalized base is returned with its actual `canvas_guard_passed` status; false means still unverified. Reports expose source hashes, normalization, transformations and the chosen attempt. Visual review remains necessary: topology is not OCR or a similarity score.
+
+Use [the symbol suite](../examples/symbol-evaluation-suite.json) with the experiment runner. Every character must already exist in the reviewed bank; unavailable math signs are not silently replaced with a generic font. Both web jobs and experiment fingerprints include the symbol renderer code.

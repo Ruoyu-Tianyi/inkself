@@ -1,0 +1,11 @@
+{
+  "name": "Repeated math symbols and small punctuation v1",
+  "preferences": {"size": 16, "line_spacing": 1.7, "ink": "#263d57"},
+  "cases": [
+    {
+      "id": "symbols",
+      "title": "Repeated symbols and numeric readability",
+      "text": "75% 75% 75% 75% 75% 75%\n11.25% 11.25% 13.125% 13.125%\n+ + + + + +   - - - - - -\n= = = = = =   × × × × × ×\n÷ ÷ ÷ ÷ ÷ ÷\n27 + 58 = 85; 120 - 45 = 75\n3.6 × 75% = 2.7\n1.1 1.1 1.1 0.025 100.00\n09:30 09:30 09:30 12:45\n1,250.75 - 900.25 = 350.50"
+    }
+  ]
+}
