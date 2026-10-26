@@ -3,6 +3,19 @@
 // Markdown is parsed by the local service; raw HTML and remote links are never
 // rendered here. The editable preview is the actual text sent to generation.
 state.documentId = null;
+const layoutLabel=element('label','输出排版','field-label');layoutLabel.htmlFor='layout-mode';
+const layoutMode=document.createElement('select');layoutMode.id='layout-mode';
+layoutMode.append(new Option('普通文档','standard'),new Option('作业答卷：题号、表格、文本决策树','assignment'));
+const headerLabel=element('label','答卷姓名、学号等（选填，仅首面）','field-label');headerLabel.htmlFor='answer-header';
+const answerHeader=document.createElement('textarea');answerHeader.id='answer-header';answerHeader.rows=2;answerHeader.maxLength=200;answerHeader.placeholder='用英文填写姓名、ID、班级；可换行';
+const layoutHelp=element('p','作业模式直接保留 Markdown 题号、表格和 text 文本树；只调整格式，不修改答案。需选择已有字形库的个人档案。','muted');
+document.querySelector('.compose-controls .label-row').before(layoutLabel,layoutMode,headerLabel,answerHeader,layoutHelp);
+layoutMode.addEventListener('change',()=>{
+  if(layoutMode.value!=='assignment')return;
+  const profile=state.profiles.find(p=>p.id===$('#profile-select').value);
+  if(profile?.reference_bank){$('#render-mode').value=profile.habit_model?'learned-habits':'reference';$('#math-enabled').checked=true;updateMathControls();}
+  else notice('作业答卷需要已有核对字形库的个人档案。请先导入或选择相应档案。',true);
+});
 const mdControls = element('div', undefined, 'markdown-controls');
 const mdLabel = element('label', '导入 Markdown 文档', 'secondary markdown-upload');
 const mdInput = document.createElement('input');
@@ -17,7 +30,7 @@ mdInput.addEventListener('change', async () => {
   if (file.size > 256 * 1024) { notice('文档不能超过 256 KB，请拆分后导入。', true); mdInput.value = ''; return; }
   mdInput.disabled = true;
   try {
-    const form = new FormData(); form.append('file', file);
+    const form = new FormData(); form.append('file', file);form.append('layout_mode',layoutMode.value);
     const imported = await api('/documents/markdown', {method:'POST', body:form});
     state.documentId = imported.id;
     $('#content').value = imported.text; countText();
@@ -29,7 +42,7 @@ mdInput.addEventListener('change', async () => {
     updateMathControls();
     const notes = [...imported.warnings];
     if (imported.math_enabled && !profile?.reference_bank) notes.push('文档包含公式，需选择已有核对字形库的档案。');
-    mdInfo.textContent = `${imported.filename} · ${imported.summary.characters} 字符。已解析为下方可编辑正文。${notes.length ? ' '+notes.join(' ') : ''}`;
+    mdInfo.textContent = `${imported.filename} · ${imported.summary.characters} 字符。${layoutMode.value==='assignment'?'已保留作业 Markdown，表格和文本树会在输出时排版。':'已解析为下方可编辑正文。'}${notes.length ? ' '+notes.join(' ') : ''}`;
     mdInfo.hidden = false;
     notice('文档已导入。检查下方正文与转换提示后，点击“生成试写”。');
   } catch (error) { notice(error.message, true); }

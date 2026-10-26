@@ -329,6 +329,9 @@ def _safe_image(folder, filename):
 
 def compose_document(folder, job, generated):
     """Save one raster page at a time and append it to the PDF."""
+    if generated.get('assignment_layout'):
+        from .runtime.assignment import compose_assignment
+        return compose_assignment(folder,job,generated)
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas
 

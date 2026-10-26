@@ -96,18 +96,24 @@ async def local_session(request:Request,call_next):
     return response
 
 @app.get('/api/session')
-def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.3.0-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
+def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.3.1-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')
 def prompt(): return prompt_payload()
 
 @app.post('/api/documents/markdown',status_code=201)
-async def import_markdown(file:UploadFile=File(...)):
+async def import_markdown(file:UploadFile=File(...),layout_mode:Literal['standard','assignment']=Form('standard')):
     from .markdown_document import decode_markdown_upload,parse_markdown
     try:
         filename=file.filename or 'document.md'
-        parsed=parse_markdown(decode_markdown_upload(await file.read(256*1024+1),filename),filename)
+        source=decode_markdown_upload(await file.read(256*1024+1),filename)
+        if layout_mode=='assignment':
+            from .runtime.assignment import parse_assignment
+            assignment=parse_assignment(source)
+            parsed={'filename':filename,'source_text':source,'text':source,'layout_mode':'assignment','math_enabled':True,
+                'warnings':assignment['warnings'],'summary':{'characters':len(source),**assignment['summary']}}
+        else:parsed=parse_markdown(source,filename)
     except ValueError as error:
         raise HTTPException(422,'Markdown 导入失败：'+str(error)) from error
     document_id=uuid.uuid4().hex
@@ -212,6 +218,8 @@ class Generation(BaseModel):
     math_enabled:bool=False
     allow_supplemental_math:bool=False
     document_id:str|None=None
+    layout_mode:Literal['standard','assignment']='standard'
+    answer_header:str=Field(default='',max_length=200)
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -243,9 +251,13 @@ def generate(body:Generation):
         if not habit_path.is_relative_to(folder.resolve()):raise HTTPException(409,'习惯适配器路径无效。')
         try:load_habits(habit_path,bank)
         except (ValueError,OSError,KeyError,TypeError) as error:raise HTTPException(409,str(error))
-    if body.math_enabled and body.render_mode not in ('reference','learned-habits'):
+    if (body.math_enabled or body.layout_mode=='assignment') and body.render_mode not in ('reference','learned-habits'):
         raise HTTPException(422,'数学公式需使用样本习惯适配或原稿字形保真。')
-    if body.render_mode in ('reference','learned-habits'):
+    if body.layout_mode=='assignment':
+        from .runtime.assignment import preflight_assignment
+        try:preflight_assignment(text,bank,body.allow_supplemental_math,body.answer_header)
+        except ValueError as error:raise HTTPException(422,str(error)) from error
+    elif body.render_mode in ('reference','learned-habits'):
         from .runtime.document_input import prepare_document
         try:prepare_document(text,bank,body.math_enabled,body.allow_supplemental_math)
         except ValueError as error:raise HTTPException(422,str(error)) from error
@@ -274,6 +286,7 @@ def generate(body:Generation):
                  'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode,
                  'math_enabled':body.math_enabled,'allow_supplemental_math':body.allow_supplemental_math,
                  'word_spacing':spacing_model}
+        request.update(layout_mode=body.layout_mode,answer_header=body.answer_header,answer_size=body.size,answer_spacing=body.line_spacing)
         if bank_path:request['reference_bank']=str(bank_path)
         if habit_path:request['habit_model']=str(habit_path)
         from .runtime.vatr_worker import request_input_hashes

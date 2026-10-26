@@ -28,6 +28,8 @@ def request_input_hashes(request):
         from web.runtime.word_spacing import validate_word_spacing
         validate_word_spacing(request['word_spacing'])
         hashes['word_spacing_sha256']=hashlib.sha256(json.dumps(request['word_spacing'],sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
+    if request.get('layout_mode')=='assignment':
+        hashes['assignment_options_sha256']=hashlib.sha256(json.dumps({key:request.get(key) for key in ('layout_mode','answer_header','answer_size','answer_spacing')},sort_keys=True).encode()).hexdigest()
     return hashes
 
 
@@ -46,6 +48,7 @@ def renderer_provenance(request,inputs):
     if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
     if mode in ('reference','learned-habits'):names.extend(['math_syntax.py','document_input.py'])
     if request.get('math_enabled'):names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py'])
+    if request.get('layout_mode')=='assignment':names.append('assignment.py')
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,
@@ -76,6 +79,16 @@ def run(request_path):
     provenance=renderer_provenance(request,input_hashes)
     from web.runtime.word_spacing import fit_word_spacing
     spacing_model=request.get('word_spacing') or fit_word_spacing()
+    if request.get('layout_mode')=='assignment':
+        if mode not in ('reference','learned-habits'):raise ValueError('Answer layout requires reviewed personal glyphs.')
+        from web.runtime.assignment import render_assignment
+        layout=render_assignment(request,bank,habit,spacing_model,output)
+        record={'model':{'name':'Personal handwriting answer-sheet layout','mode':mode,'device':'cpu',
+            'supplemental_math_glyphs':layout['supplemental_math_glyphs'],**provenance},
+            'duration_seconds':round(time.monotonic()-started,2),'words':[],
+            'word_spacing':spacing_model,'assignment_layout':layout}
+        (output/'generated.json').write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
+        return
     if mode in ('reference','learned-habits'):
         from web.runtime.document_input import prepare_document
         from web.runtime.math_renderer import render_math

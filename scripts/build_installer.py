@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / 'packaging/InkselfInstaller.iss'
 INSTALLED_MODE = ROOT / 'packaging/installed-mode.json'
 MODEL_MANIFEST = ROOT / 'web/model-assets.json'
-APP_VERSION = '0.3.0'
+APP_VERSION = '0.3.1'
 PRIVATE_DIRECTORIES = {'.local', 'data', 'config', 'logs', 'log', 'models',
                        'profiles', 'samples', 'outputs', 'experiments', '.git', '.venv'}
 PRIVATE_FILENAMES = {'desktop-config.json', 'desktop-session.json', 'window-loaded.json',
