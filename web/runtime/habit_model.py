@@ -182,18 +182,20 @@ def _endpoint(image,baseline,side,target_offset=-5,scale=3):
 
 def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
  from .symbol_style import SYMBOLS,render_symbol,symbol_token,fit_percent_to_canvas
+ from .digit_style import numeric_token,render_digit,digit_gap
  if missing_characters(bank,text):raise ValueError('Missing reviewed glyphs.')
  if not any(c.isalpha() for c in text):
+  if any(c in "0123456789" for c in text):return numeric_token(bank,text,seed,variant)
   if any(c in SYMBOLS for c in text):return symbol_token(bank,text,seed,variant)
   return reference_token(bank,text,prefer_words=False)
  digest=hashlib.sha256(f'{seed}:{variant}:{text}'.encode()).digest();rng=np.random.default_rng(int.from_bytes(digest[:8],'little'))
  # Retain learned high-resolution strokes until the final PDF compositor resamples.
- scale=3;pieces=[];provenance=[];symbol_variants=[];bearings=[];advances=[]
+ scale=3;pieces=[];provenance=[];symbol_variants=[];digit_variants=[];bearings=[];advances=[]
  for index,char in enumerate(text):
   rec=bank['glyphs'][char];im=_image(bank,rec);native_w,native_h=im.size;wx=hy=1.
-  if char in SYMBOLS:
-   im,base,meta=render_symbol(bank,char,seed,variant,index)
-   pieces.append((char,im,base));provenance.append(rec['sha256']);symbol_variants.append(meta)
+  if char in SYMBOLS or char in "0123456789":
+   im,base,meta=(render_digit if char.isdigit() else render_symbol)(bank,char,seed,variant,index)
+   pieces.append((char,im,base));provenance.append(rec['sha256']);(digit_variants if char.isdigit() else symbol_variants).append(meta)
    bearings.append(meta['left_padding']);advances.append(meta['layout_width']);continue
   if allographs and char in model.get('allographs',{}):
    raster=model['allographs'][char];im=Image.fromarray(np.asarray(raster['values'],dtype='uint8').reshape(raster['height'],raster['width']))
@@ -210,6 +212,7 @@ def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
   positions.append((x-bearings[i],baseline-base));pair=text[i:i+2]
   gap=0 if should_connect(model,pair) else 1
   if not char.isalpha() or (i+1<len(text) and not text[i+1].isalpha()):gap=3
+  if len(pair)==2 and all(c in "0123456789" for c in pair):gap=digit_gap(seed,variant,i)
   x+=advances[i]+gap
  positions=[(px,py+float(np.clip(slope*(px-x/2),-.8,.8))) for px,py in positions]
  result=Image.new('L',((math.ceil(x)+(7 if symbol_variants else 4))*scale,height*scale),255)
@@ -232,7 +235,7 @@ def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
    points=[((x0+t*(x1-x0))*scale,(y0+t*(y1-y0)+4*model['connector_bow_px']*t*(1-t))*scale) for t in np.linspace(0,1,32)]
    draw.line(points,fill=45,width=scale);joined.append(pair)
  return result,{'baseline':baseline*scale,'em_height':32*scale,'raster_scale':scale,'renderer':'sample-fitted-habits','references':provenance,
-  'symbol_variants':symbol_variants,
+  'symbol_variants':symbol_variants,'digit_variants':digit_variants,
   'sampled_baseline_slope':slope,'learned_allographs':[c for c in text if allographs and c in model.get('allographs',{})],
   'connections_from_generalized_rules':[pair for pair in joined if pair not in model['pairs']],'learned_connections':joined,
   'habit_observations':model['observations'],'limits':model['limits']}

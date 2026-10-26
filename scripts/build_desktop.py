@@ -196,6 +196,8 @@ def webview_notice_lines(record):
 
 
 def copy_licenses(bundle, distributions):
+    for notice in ('LICENSE', 'NOTICE.txt', 'COMMERCIAL-LICENSE.md'):
+        shutil.copyfile(ROOT / notice, bundle / notice)
     license_root = bundle / 'licenses'
     license_root.mkdir()
     inventory = []

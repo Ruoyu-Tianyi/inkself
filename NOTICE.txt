@@ -1,0 +1,4 @@
+Required Notice: Copyright (c) 2026 Ruoyu-Tianyi (https://github.com/Ruoyu-Tianyi/inkself)
+
+Project-owned code: PolyForm Noncommercial 1.0.0.
+Third-party components retain their own licenses. See COMMERCIAL-LICENSE.md.

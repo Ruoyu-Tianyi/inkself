@@ -73,6 +73,13 @@ class InstallerSafety(unittest.TestCase):
         self.manifest_patch.stop()
         self.tmp.cleanup()
 
+    def test_first_party_license_files_are_preserved_in_payload(self):
+        for name in ('LICENSE','NOTICE.txt','COMMERCIAL-LICENSE.md'):
+            (self.app/name).write_text('Synthetic project notice',encoding='utf-8')
+        checksums(self.app)
+        names={item['relative'] for item in installer.installer_payload(self.app)}
+        self.assertTrue({'LICENSE','NOTICE.txt','COMMERCIAL-LICENSE.md'}.issubset(names))
+
     def test_core_allowlist_includes_runtime_notices_checksums_and_marker(self):
         records = installer.installer_payload(self.app)
         names = {item['relative'] for item in records}

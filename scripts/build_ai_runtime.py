@@ -78,6 +78,8 @@ def dependency_inventory(analysis_path):
 
 def copy_runtime_licenses(bundle, distributions):
     """Reuse license selection/copy rules without the desktop-only WebView2 step."""
+    for notice in ('LICENSE', 'NOTICE.txt', 'COMMERCIAL-LICENSE.md'):
+        shutil.copyfile(ROOT / notice, bundle / notice)
     root = bundle / 'licenses'
     root.mkdir()
     inventory = []

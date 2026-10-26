@@ -91,3 +91,7 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 样本、转录、风格缓存、文档及包含完整输入的报告默认只保存在本机，已排除 Git 跟踪。仅使用本人或经授权的样本，不提供签名或身份认证功能。
 
 早期实验受 [TypeScribe](https://github.com/rudyoactiv/typescribe-handwriting) 启发；当前网页的静态图片风格生成使用 VATr++，不是 TypeScribe 的笔迹轨迹 priming 接口。
+
+## 许可与商业授权
+
+本项目自有代码采用 [PolyForm Noncommercial 1.0.0](LICENSE)，属于限制用途的源码可用项目。非商业用途及许可明确列出的机构用途可按条款使用；超出许可范围的商业使用须取得单独书面授权，作者保留商业化授权权利。参见 [商业授权说明](COMMERCIAL-LICENSE.md) 和 [贡献政策](CONTRIBUTING.md)。第三方组件、字体与模型保留各自许可。

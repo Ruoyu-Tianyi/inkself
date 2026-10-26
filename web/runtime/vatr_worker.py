@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-5'
+RENDERER_VERSION='inkself-runtime-6'
 
 
 def _sha256(path):
@@ -45,7 +45,8 @@ def renderer_provenance(request,inputs):
     mode=request.get('render_mode','model')
     names=['vatr_worker.py','word_spacing.py']
     if mode!='model':names.append('reference_renderer.py')
-    if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py'])
+    if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py','digit_style.py'])
+    if mode=='model-calibrated':names.extend(['symbol_style.py','digit_style.py'])
     if mode in ('reference','learned-habits'):names.extend(['math_syntax.py','document_input.py'])
     if request.get('math_enabled'):names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py'])
     if request.get('layout_mode')=='assignment':names.append('assignment.py')
@@ -179,7 +180,8 @@ def run(request_path):
         for token in re.findall(r'\n|[^\s]+',request['text']):
             if token=='\n':result.append({'newline':True});continue
             if bank and re.fullmatch(r'[0-9.+%\-=]+',token):
-                image,metadata=reference_token(bank,token,prefer_words=False)
+                from web.runtime.digit_style import numeric_token
+                image,metadata=numeric_token(bank,token,request['seed'],len(result))
                 name=f'word-{len(result):04}.png';image.save(output/name)
                 result.append({'text':token,'file':name,'width':image.width,'height':image.height,**metadata})
                 continue

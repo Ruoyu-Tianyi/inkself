@@ -23,13 +23,13 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / 'packaging/InkselfInstaller.iss'
 INSTALLED_MODE = ROOT / 'packaging/installed-mode.json'
 MODEL_MANIFEST = ROOT / 'web/model-assets.json'
-APP_VERSION = '0.3.1'
+APP_VERSION = '0.3.2'
 PRIVATE_DIRECTORIES = {'.local', 'data', 'config', 'logs', 'log', 'models',
                        'profiles', 'samples', 'outputs', 'experiments', '.git', '.venv'}
 PRIVATE_FILENAMES = {'desktop-config.json', 'desktop-session.json', 'window-loaded.json',
                      'profile.json', 'bank.json', 'request.json', 'job.json', 'direct_url.json', 'uv_build.json'}
 COMMON_FILES = {'build-manifest.json', 'SHA256SUMS.txt', 'THIRD_PARTY_NOTICES.txt',
-                'LICENSE', 'LICENSE.txt', 'NOTICE.txt'}
+                'LICENSE', 'LICENSE.txt', 'NOTICE.txt', 'COMMERCIAL-LICENSE.md'}
 APP_FILES = COMMON_FILES | {'Inkself.exe', '使用说明.md', 'math-and-documents.md',
                            'experiment-workflow.md', 'habit-adapter.md', 'markdown-import.md', 'ai-workflow.md'}
 AI_FILES = COMMON_FILES | {'InkselfAI.exe'}

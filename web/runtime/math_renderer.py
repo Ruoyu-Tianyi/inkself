@@ -19,11 +19,12 @@ def _join(children, gap=2):
         return Box(Image.new('L', (1, 1), 255), 0)
     ascent = max(0, max(b.baseline for b in children))
     descent = max(0, max(b.image.height-b.baseline for b in children))
-    image = Image.new('L', (sum(b.image.width for b in children)+gap*(len(children)-1), max(1,ascent+descent)), 255)
+    gaps = gap if isinstance(gap,list) else [gap]*(len(children)-1)
+    image = Image.new('L', (sum(b.image.width for b in children)+sum(gaps), max(1,ascent+descent)), 255)
     x = 0
-    for box in children:
+    for index,box in enumerate(children):
         image.paste(box.image, (x,ascent-box.baseline))
-        x += box.image.width+gap
+        x += box.image.width+(gaps[index] if index<len(gaps) else 0)
     return Box(image, ascent)
 
 
@@ -81,7 +82,10 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
         if kind=='glyph':
             return glyph(node['text'])
         if kind=='sequence':
-            return _join([render(child,depth+1) for child in node['children']])
+            children=node['children']; boxes=[render(child,depth+1) for child in children]
+            from .digit_style import digit_gap
+            gaps=[round(digit_gap(seed,variant*10000+counter,i)*SCALE) if model and a.get('type')==b.get('type')=='glyph' and a.get('text','') in '0123456789' and b.get('text','') in '0123456789' else 2 for i,(a,b) in enumerate(zip(children,children[1:]))]
+            return _join(boxes,gaps)
         if kind=='named_operator':
             box=_join([glyph(c) for c in node['text']],gap=1)
             return _scaled(box,1.4) if node.get('limits') and node['text'] in ('∑','∏','∫') else box

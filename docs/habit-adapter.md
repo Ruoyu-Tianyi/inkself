@@ -43,3 +43,9 @@ An oversized percent can be scaled relative to the sample's digits. When two loo
 Connected components and holes are checked before accepting a symbol. Percent candidates are also checked as isolated layers at their actual position on a fixed word canvas, across UI font sizes 10–26. Deterministic retries leave digit positions, canvas dimensions and baselines fixed. If no candidate passes, the normalized base is returned with its actual `canvas_guard_passed` status; false means still unverified. Reports expose source hashes, normalization, transformations and the chosen attempt. Visual review remains necessary: topology is not OCR or a similarity score.
 
 Use [the symbol suite](../examples/symbol-evaluation-suite.json) with the experiment runner. Every character must already exist in the reviewed bank; unavailable math signs are not silently replaced with a generic font. Both web jobs and experiment fingerprints include the symbol renderer code.
+
+## 数字自然变化
+
+习惯模式和模型校准模式中的数字保留审核样本笔迹，按种子、出现次数和位置施加有界旋转、宽高和基线变化；相邻数字使用共享节奏与局部扰动的正间距。正文、表格和公式均生效，原稿对照模式不变。变化带有来源哈希，保留连通分量和孔洞；不合格候选回退原图。小数点、百分号沿用各自的可读性保护。
+
+这属于对已有数字的程序化变化，尚不是从多个真实数字样本学到的不同写法，也不是笔顺或压力建模。仍需人工检查 0/6/8/9 等易混数字及小字号输出。

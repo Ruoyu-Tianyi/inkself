@@ -1,7 +1,7 @@
 """Bounded, reproducible symbol variation on reviewed personal ink.
 
 This is procedural variation, not inferred pen pressure or newly learned shapes.
-Digits and the reference renderer remain unchanged. Ambiguous percent components
+Digit variation is opt-in; the reference renderer remains unchanged. Percent components
 are not reconstructed, and topology-changing variations fall back to the base.
 """
 import hashlib
@@ -121,13 +121,13 @@ def _percent_parts(base, rng):
     return (output, True) if topology(output) == (3, 2) else (base, False)
 
 
-def render_symbol(bank, char, seed=42, occurrence=0, index=0, attempt=0, variation=True):
+def render_symbol(bank, char, seed=42, occurrence=0, index=0, attempt=0, variation=True, allow_digit=False):
     """Return high-resolution ink, native baseline, and auditable variation.
 
     left_padding is excluded from layout_width; compositors must place the ink
     that far left of its logical origin. This preserves digit/symbol spacing.
     """
-    if char not in SYMBOLS:
+    if char not in SYMBOLS and not (allow_digit and char in '0123456789'):
         raise ValueError('Only supported punctuation and operators can vary.')
     record = bank['glyphs'][char]
     source = _image(bank, record)
@@ -206,23 +206,30 @@ def fit_percent_to_canvas(bank, image, meta, canvas_size, position, seed, occurr
     return image, {**meta, 'canvas_guard_passed': legible(image), 'variation_attempt': 'normalized-base'}
 
 
-def symbol_token(bank, text, seed=42, occurrence=0):
+def symbol_token(bank, text, seed=42, occurrence=0, vary_digits=False):
     """Compose nonalphabetic tokens without applying letter geometry to digits."""
     pieces = []
     variants = []
     references = []
+    digit_variants = []
+    digit_gaps = []
     for index, char in enumerate(text):
         record = bank['glyphs'][char]
         source = _image(bank, record)
-        if char in SYMBOLS:
-            image, baseline, meta = render_symbol(bank, char, seed, occurrence, index)
-            variants.append(meta)
+        if char in SYMBOLS or (vary_digits and char.isascii() and char.isdigit()):
+            image, baseline, meta = render_symbol(bank, char, seed, occurrence, index, allow_digit=vary_digits)
+            (digit_variants if char.isdigit() else variants).append(meta)
             bearing = meta['left_padding']
             advance = meta['layout_width'] + max(1., float(record.get('advance', source.width+2))-source.width)
         else:
             image = source.resize((source.width*SCALE, source.height*SCALE), Image.Resampling.LANCZOS)
             baseline, bearing = float(record['baseline']), 0.
             advance = max(source.width+1, float(record.get('advance', source.width+2)))
+        if vary_digits and char.isdigit() and index+1 < len(text) and text[index+1].isdigit():
+            from .digit_style import digit_gap
+            gap = digit_gap(seed, occurrence, index)
+            advance += gap - max(1., float(record.get('advance', source.width+2))-source.width)
+            digit_gaps.append(gap)
         pieces.append((image, baseline, bearing, advance))
         references.append(record['sha256'])
     base = math.ceil(max(p[1] for p in pieces))+4
@@ -242,5 +249,6 @@ def symbol_token(bank, text, seed=42, occurrence=0):
         np.minimum(area, np.asarray(im), out=area)
         x += advance
     return Image.fromarray(result), {'baseline': base*SCALE, 'em_height': 32*SCALE, 'raster_scale': SCALE,
-        'renderer': 'captured-digits-with-symbol-variation', 'references': references,
+        'renderer': 'sample-digits-with-bounded-variation' if vary_digits else 'captured-digits-with-symbol-variation', 'references': references,
+        'digit_variants': digit_variants, 'digit_gaps_px': digit_gaps,
         'symbol_variants': variants, 'symbol_variation_limit': 'Bounded procedural variation; not learned stroke dynamics.'}

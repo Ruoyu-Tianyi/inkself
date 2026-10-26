@@ -28,9 +28,12 @@ class HabitAdapter(unittest.TestCase):
   im,meta=habit_token(self.bank,self.model,'naen')
   self.assertEqual(meta['renderer'],'sample-fitted-habits');self.assertEqual(len(meta['references']),4)
   self.assertTrue(np.any(np.asarray(im)<170))
- def test_digit_pixels_unchanged(self):
-  a,_=reference_token(self.bank,'121',False);b,_=habit_token(self.bank,self.model,'121')
-  self.assertEqual(a.tobytes(),b.tobytes());self.assertEqual(a.size,b.size)
+ def test_digit_uses_sample_variants_without_modifying_reference(self):
+  a,_=reference_token(self.bank,'121',False);b,meta=habit_token(self.bank,self.model,'121')
+  self.assertEqual(meta['references'],[self.bank['glyphs'][c]['sha256'] for c in '121'])
+  self.assertEqual(len(meta['digit_variants']),3)
+  self.assertEqual(a.tobytes(),reference_token(self.bank,'121',False)[0].tobytes())
+  self.assertNotEqual(a.tobytes(),b.tobytes())
  def test_seed_and_occurrence_reproducible_and_margins_not_clipped(self):
   a,meta=habit_token(self.bank,self.model,'anne',seed=7,variant=4);b,_=habit_token(self.bank,self.model,'anne',seed=7,variant=4)
   self.assertEqual(a.tobytes(),b.tobytes());self.assertEqual(meta['em_height'],96);self.assertEqual(meta['raster_scale'],3)
