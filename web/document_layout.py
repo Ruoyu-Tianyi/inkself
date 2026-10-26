@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-VERSION = 'inkself-document-layout-2'
+VERSION = 'inkself-document-layout-3'
 
 
 def _spacing_gaps(items, model, seed):
@@ -76,8 +76,11 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
         nonlocal pending, pending_width
         if not pending:
             return
-        ascent = max(nominal_ascent, max(piece['baseline'] for piece in pending))
-        descent = max(nominal_descent, max(piece['height'] - piece['baseline'] for piece in pending))
+        from .runtime.baseline_rhythm import word_offsets
+        offsets=word_offsets([p['width'] for p in pending],[p.get('gap_before',0) for p in pending],em,preferences.get('seed',42),len(lines)) if preferences.get('baseline_variation',True) and not display else [0]*len(pending)
+        for piece,dy in zip(pending,offsets):piece['baseline_offset']=dy
+        ascent = max(nominal_ascent, max(piece['baseline']-piece['baseline_offset'] for piece in pending))
+        descent = max(nominal_descent, max(piece['height']-piece['baseline']+piece['baseline_offset'] for piece in pending))
         height = ascent + descent
         if height > capacity:
             raise ValueError('An item is taller than the printable page; reduce its size.')
@@ -174,8 +177,9 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
         for piece in line['pieces']:
             x += piece.get('gap_before', 0)
             entry = {'item_index': piece['item_index'], 'page': page, 'line': line_id,
-                     'x': x, 'y': baseline_y - piece['baseline'],
-                     'width': piece['width'], 'height': piece['height'], 'baseline': baseline_y,
+                     'x': x, 'y': baseline_y - piece['baseline']+piece['baseline_offset'],
+                     'width': piece['width'], 'height': piece['height'], 'baseline': baseline_y+piece['baseline_offset'],
+                     'baseline_offset':piece['baseline_offset'],
                      'display_math': line['display_math'], 'effective_scale': piece['effective_scale'],
                      'gap_before': piece.get('gap_before', 0)}
             if 'source_image_box' in piece:
@@ -356,10 +360,13 @@ def compose_document(folder, job, generated):
             items.append({**item, 'width': crop[2] - crop[0], 'height': image.height,
                           'source_image_box': crop, 'image_sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
         paths[index] = path
-    plan = plan_document(items, job['preferences'], word_spacing=spacing_model)
+    model_info=generated.get('model',{})
+    reference_mode=isinstance(model_info,dict) and model_info.get('mode')=='reference'
+    plan = plan_document(items, {**job['preferences'], 'baseline_variation':not reference_mode}, word_spacing=spacing_model)
     code = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in (
         ('document_layout.py', Path(__file__)),
-        ('word_spacing.py', Path(__file__).parent / 'runtime/word_spacing.py'))}
+        ('word_spacing.py', Path(__file__).parent / 'runtime/word_spacing.py'),
+        ('baseline_rhythm.py', Path(__file__).parent / 'runtime/baseline_rhythm.py'))}
     identity = {'version': VERSION, 'code_sha256': code, 'preferences': job['preferences'],
                 'word_spacing': spacing_model,
                 'text_sha256': hashlib.sha256(job['text'].encode('utf-8')).hexdigest(),

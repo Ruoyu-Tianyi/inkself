@@ -49,7 +49,7 @@ def renderer_provenance(request,inputs):
     if mode=='model-calibrated':names.extend(['symbol_style.py','digit_style.py'])
     if mode in ('reference','learned-habits'):names.extend(['math_syntax.py','document_input.py'])
     if request.get('math_enabled'):names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py'])
-    if request.get('layout_mode')=='assignment':names.append('assignment.py')
+    if request.get('layout_mode')=='assignment':names.extend(['assignment.py','baseline_rhythm.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,

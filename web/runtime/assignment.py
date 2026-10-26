@@ -125,7 +125,7 @@ def preflight_assignment(source,bank,allow_supplemental=False,header=''):
 class Writer:
     def __init__(self,bank,habit,spacing,seed,allow,line_spacing=1.6):
         self.bank,self.habit,self.spacing,self.seed,self.allow=bank,habit,spacing,seed,allow
-        self.counter=0;self.references=set();self.supplements=set()
+        self.counter=0;self.references=set();self.supplements=set();self.baseline_lines=[]
         self.leading_factor=1.18*line_spacing/1.6
 
     def native(self,text):
@@ -153,10 +153,11 @@ class Writer:
         im,base=self.join(pieces);return im,base,96
 
     @staticmethod
-    def join(pieces):
-        ascent=max(p[1] for p in pieces);descent=max(p[0].height-p[1] for p in pieces)
+    def join(pieces,offsets=None):
+        offsets=offsets if offsets is not None else [0]*len(pieces)
+        ascent=max(p[1]-dy for p,dy in zip(pieces,offsets));descent=max(p[0].height-p[1]+dy for p,dy in zip(pieces,offsets))
         image=Image.new('L',(max(1,sum(p[0].width+p[2] for p in pieces)),max(1,ascent+descent+2)),255);x=0
-        for im,base,gap in pieces:x+=gap;image.paste(im,(x,ascent-base));x+=im.width
+        for (im,base,gap),dy in zip(pieces,offsets):x+=gap;image.paste(im,(x,ascent-base+dy));x+=im.width
         return image,ascent
 
     def tokens(self,text,em):
@@ -183,16 +184,21 @@ class Writer:
             text=re.sub(r';\s+(?=[A-Za-z]+_[A-Za-z])',';\n',text)
         tokens=self.tokens(text,em);gaps=sample_word_gaps(self.spacing,len(tokens),self.seed,self.counter)
         lines=[];pending=[];used=0
+        def finish_line():
+            from .baseline_rhythm import word_offsets
+            offsets=word_offsets([p[0].width for p in pending],[p[2] for p in pending],em,self.seed,len(self.baseline_lines)) if self.habit else [0]*len(pending)
+            self.baseline_lines.append({'em':em,'offsets_px':offsets})
+            lines.append(self.join(pending,offsets))
         for index,token in enumerate(tokens):
             if token is None:
-                if pending:lines.append(self.join(pending));pending=[];used=0
+                if pending:finish_line();pending=[];used=0
                 continue
             im,base,space=token
             if im.width>width:raise ValueError('连续公式或单词过宽，请在运算符前后加空格或拆行。')
             gap=round(gaps[index]*em) if pending and space else 0
-            if pending and used+gap+im.width>width:lines.append(self.join(pending));pending=[];used=0;gap=0
+            if pending and used+gap+im.width>width:finish_line();pending=[];used=0;gap=0
             pending.append((im,base,gap));used+=gap+im.width
-        if pending:lines.append(self.join(pending))
+        if pending:finish_line()
         if not lines:raise ValueError('空白段落。')
         leading=[max(round(em*self.leading_factor),im.height+6) for im,_ in lines]
         image=Image.new('L',(width,sum(leading[:-1])+lines[-1][0].height),255);y=0
@@ -275,7 +281,7 @@ def render_assignment(request,bank,habit,spacing,output):
     for digit in '0123456789':
         im=writer.paragraph(digit,22,100);box=ImageOps.invert(im).getbbox();im=im.crop((0,0,box[2]+1,im.height))
         filename=f'footer-{digit}.png';im.save(output/filename);footer_digits[digit]=filename
-    metadata={'version':VERSION,'entries':entries,'footer_digits':footer_digits,'document':document,'references':sorted(writer.references),
+    metadata={'version':VERSION,'baseline_rhythm':{'method':'bounded procedural line drift and correlated word lifts','lines':writer.baseline_lines},'entries':entries,'footer_digits':footer_digits,'document':document,'references':sorted(writer.references),
               'supplemental_math_glyphs':sorted(writer.supplements),'em':em}
     (output/'assignment.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf-8')
     return metadata

@@ -141,7 +141,7 @@ def provenance(bank_path, model_path, suite, bank, modes, seed):
         'scripts/run_handwriting_experiment.py', 'scripts/fit_habits.py', 'web/runtime/reference_renderer.py',
         'web/runtime/habit_model.py', 'web/runtime/digit_style.py', 'web/runtime/symbol_style.py', 'web/runtime/vatr_worker.py', 'web/app.py',
         'web/runtime/math_syntax.py', 'web/runtime/math_glyphs.py', 'web/runtime/math_renderer.py', 'web/runtime/math_strokes.py',
-        'web/runtime/document_input.py', 'web/runtime/word_spacing.py', 'web/document_layout.py')}
+        'web/runtime/document_input.py', 'web/runtime/word_spacing.py', 'web/runtime/baseline_rhythm.py', 'web/document_layout.py')}
     assets = {record['file']: record['sha256'] for group in ('glyphs', 'words') for record in bank.get(group, {}).values()}
     return {
         'bank_sha256': digest(bank_path), 'model_sha256': digest(model_path) if model_path else None,

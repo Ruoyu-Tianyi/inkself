@@ -149,7 +149,7 @@ class DocumentLayout(unittest.TestCase):
                  word('display', width=260, height=110, baseline=85, display_math=True), word('after')]
         plan = plan_document(items, PREFERENCES)
         places = {entry['item_index']: entry for entry in plan['placements']}
-        self.assertEqual(places[0]['baseline'], places[1]['baseline'])
+        self.assertLessEqual(abs(places[0]['baseline']-places[1]['baseline']),10)
         self.assertGreaterEqual(places[3]['y'], places[1]['y'] + places[1]['height'])
         display = places[4]
         self.assertLessEqual(abs(display['x'] + display['width'] / 2 - plan['page_width'] / 2), .5)
