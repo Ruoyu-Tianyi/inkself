@@ -57,7 +57,7 @@ def model_fixture(root, names=None):
 class InstallerSafety(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
         self.app = fixture(self.root / 'Core 应用')
         self.ai = fixture(self.root / 'AI runtime', ai=True)
         self.model, self.model_spec = model_fixture(self.root / 'test model')

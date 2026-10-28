@@ -9,6 +9,7 @@ from PIL import Image
 
 
 def _child(root,name):
+    root=Path(root).resolve()
     path=(root/name).resolve()
     if not path.is_relative_to(root):raise ValueError('Reference asset escapes its bank.')
     return path

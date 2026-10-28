@@ -1,9 +1,12 @@
 -r ../desktop-requirements.txt
 numpy>=1.26,<2
 opencv-python-headless>=4.10,<4.12
-torch==2.5.1
-torchvision==0.20.1
+torch==2.5.1; platform_machine == "arm64"
+torch==2.2.2; platform_machine == "x86_64"
+torchvision==0.20.1; platform_machine == "arm64"
+torchvision==0.17.2; platform_machine == "x86_64"
 safetensors>=0.4,<1
 huggingface-hub>=0.26,<1
 matplotlib>=3.9,<4
 scipy>=1.13,<2
+pypdfium2>=4.30,<6

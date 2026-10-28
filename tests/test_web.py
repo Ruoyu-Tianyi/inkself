@@ -9,7 +9,7 @@ from web import app as w
 
 def sample():
     image=Image.new('RGB',(1500,650),'white');draw=ImageDraw.Draw(image)
-    font=ImageFont.truetype('C:/Windows/Fonts/arial.ttf' if Path('C:/Windows/Fonts/arial.ttf').exists() else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',42)
+    font=ImageFont.truetype(str(Path(__file__).resolve().parents[1]/'web/static/fonts/DejaVuSans.ttf'),42)
     for i,line in enumerate(w.PROMPT_LINES):draw.text((35,25+i*110),line,font=font,fill='#20334a')
     stream=io.BytesIO();image.save(stream,format='PNG');return stream.getvalue()
 
@@ -132,7 +132,7 @@ class WebAPI(unittest.TestCase):
     def test_tight_lines_with_sparse_bridging_strokes(self):
         from web.samples import process_sample
         image=Image.new('RGB',(1400,350),'white');draw=ImageDraw.Draw(image)
-        font=ImageFont.truetype('C:/Windows/Fonts/arial.ttf' if Path('C:/Windows/Fonts/arial.ttf').exists() else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',36)
+        font=ImageFont.truetype(str(Path(__file__).resolve().parents[1]/'web/static/fonts/DejaVuSans.ttf'),36)
         for i in range(5):draw.text((35,15+i*48),'Bright ideas bring 0123456789 and quiet thoughts.',font=font,fill='black')
         # A few sparse pixels between bodies must not merge the text lines.
         draw.line((10,25,10,255),fill='black',width=1)
