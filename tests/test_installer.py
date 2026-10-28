@@ -73,6 +73,13 @@ class InstallerSafety(unittest.TestCase):
         self.manifest_patch.stop()
         self.tmp.cleanup()
 
+    def test_license_inventory_does_not_copy_package_code_or_caches(self):
+        from scripts.build_desktop import license_file
+        self.assertTrue(license_file('package/licenses/LICENSE.txt'))
+        self.assertTrue(license_file('package.dist-info/licenses/MIT'))
+        self.assertFalse(license_file('packaging/licenses/__init__.py'))
+        self.assertFalse(license_file('packaging/licenses/__pycache__/__init__.cpython-311.pyc'))
+
     def test_first_party_license_files_are_preserved_in_payload(self):
         for name in ('LICENSE','NOTICE.txt','COMMERCIAL-LICENSE.md'):
             (self.app/name).write_text('Synthetic project notice',encoding='utf-8')

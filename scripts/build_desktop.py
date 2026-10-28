@@ -149,6 +149,8 @@ def dependency_inventory(analysis_path):
 def license_file(relative):
     parts = PurePosixPath(str(relative).replace('\\', '/')).parts
     base = parts[-1].lower()
+    if any(part.lower()=='__pycache__' for part in parts) or PurePosixPath(base).suffix in {'.py','.pyc','.pyo','.exe','.dll','.so','.dylib'}:
+        return False
     return ('licenses' in (part.lower() for part in parts)
             or re.match(r'^(licen[sc]e|copying|notice)([._-]|$)', base)
             or base.endswith(('-license.txt', '-copying.txt', '-copying-gpl.txt')))
