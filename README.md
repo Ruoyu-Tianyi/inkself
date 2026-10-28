@@ -1,8 +1,14 @@
 # Inkself
 
-Few-shot handwriting imitation from a short reference sample, with a local web studio, Windows installer, bundled CPU inference runtime and PDF export.
+Few-shot handwriting imitation from a short reference sample, with a local web studio, Windows and macOS desktop packages, bundled CPU inference runtime and PDF export.
 
-通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页及 Windows 桌面内测版，真人验收进行中，尚未达到正式发布的质量门槛。**
+通过一段自然书写的英文与数字样本，生成带有个人书写风格的新内容。**当前为本机单用户网页及 Windows/macOS 桌面预览版，真人验收进行中，尚未达到稳定正式版的质量门槛。**
+
+## 桌面预览版下载
+
+前往 [GitHub Releases](https://github.com/Ruoyu-Tianyi/inkself/releases) 下载 Windows x64 安装包，或 macOS Apple Silicon / Intel DMG。Mac 应用拖入 Applications 后运行；个人数据保存在用户目录，不写入应用包。
+
+Windows 包尚未签名；Mac 包采用临时签名，尚无 Apple Developer ID 签名或公证。操作系统可能提示拦截，请核对官方发布和 SHA-256，并阅读 [Mac 安装说明](docs/macos-guide.md) 或 [Windows 桌面指南](docs/desktop-guide.md)。不要关闭系统全局安全保护。
 
 ## 当前能力
 
@@ -15,11 +21,11 @@ Few-shot handwriting imitation from a short reference sample, with a local web s
 - 数学输入支持行内/独立公式、上下标、分式、根号、嵌套括号、求和、积分和希腊字母；括号与根号参考样本笔宽、倾斜和轻微变化绘制，缺失数学字形须明确允许使用配套手写字形。
 - Markdown 文件导入：本机解析标题、段落、列表、强调和公式，预览后直接生成；保存原文及转换提示。
 - 作业答卷输出：数字题号、选择题分栏、表格、文本决策树、常见下标记号、同题分页和表头重复；可填写首面信息，需已核对个人字形档案。
-- Windows 当前用户安装器和独立本地 AI 引擎，首次一键下载并校验固定模型；无需用户配置 Python 或 API 密钥，升级及卸载保留个人数据。
+- Windows 当前用户安装器、Mac 双架构应用和独立本地 CPU AI 引擎，首次下载并校验固定模型；无需用户配置 Python 或 API 密钥，个人数据独立保存。
 - 可复用的批量对照流程：固定测试文本、输入快照、模型/代码指纹、HTML 对照页与逐文件复现校验。
 - 实验性样本习惯适配：从人工核对的词图拟合共享字母尺寸、部分正文异体字、抬笔与连接统计；可将部分规则应用到未见新词。
 - 习惯适配中的符号变化：校正过大的百分号和过粗斜线，加入可复现的轻微形状变化，并保护小字号的小数点、冒号与百分号圆圈。
-- 实验性原稿字形库：经人工标注和逐字核对后，可选择原稿字形保真，或模型字宽/倾斜校正并复用原稿数字。该字形库目前需开发者准备，尚未自动从上传图片建立。
+- 实验性原稿字形库：经人工标注和逐字核对后，可选择原稿字形保真，或模型字宽/倾斜校正并对原稿数字做有界形态与间距变化。该字形库目前需开发者准备，尚未自动从上传图片建立。
 
 当前按词生成与排版，不是完整段落级连续笔画。习惯适配仍使用原稿栅格笔画骨架，不是端到端的笔画轨迹生成器；尚不能从任意未标注短样本自动克隆字迹。默认模型不使用通用字体替换，也不要求逐字采集所有字符。另有需人工逐字核对的原稿字形保真对照模式：复用已见词、片段及字母，不能推断未见字符或连笔。
 
@@ -52,7 +58,7 @@ cd inkself
 
 | 项目 | 状态 |
 | --- | --- |
-| 本地自动测试 | 最近一次 235 项：234 通过，1 项实际符号链接测试因 Windows 权限跳过 |
+| 本地自动测试 | 最近一次 Windows 检查 244 项：243 通过，1 项实际符号链接测试因 Windows 权限跳过；Mac 原生检查结果见 GitHub Actions |
 | 真实模型推理 | 源码环境及独立 InkselfAI.exe 已实际生成，验证缓存复用、完整结果与任务日志；不代表相似度通过 |
 | 网页流程 | 已试跑上传、确认、生成、预览和 PDF；检查过桌面/手机宽度布局 |
 | 本人相似度与真人泛化 | **验收进行中，尚无通过结论** |
