@@ -76,7 +76,7 @@ def dependency_inventory(analysis_path):
     return found
 
 
-def copy_runtime_licenses(bundle, distributions):
+def copy_runtime_licenses(bundle, distributions, python_license=None):
     """Reuse license selection/copy rules without the desktop-only WebView2 step."""
     for notice in ('LICENSE', 'NOTICE.txt', 'COMMERCIAL-LICENSE.md'):
         shutil.copyfile(ROOT / notice, bundle / notice)
@@ -116,7 +116,7 @@ def copy_runtime_licenses(bundle, distributions):
         inventory.append(record)
         if not copied and len(declared) < 150:
             warnings.append(f'{record["name"]}: installed package has no full license text; see package.json and upstream links.')
-    python_license = Path(sys.base_prefix) / 'LICENSE.txt'
+    python_license = Path(python_license) if python_license is not None else Path(sys.base_prefix) / 'LICENSE.txt'
     if not python_license.is_file():
         raise RuntimeError('Python LICENSE.txt is required for distribution.')
     (root / 'python').mkdir()

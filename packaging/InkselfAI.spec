@@ -50,6 +50,10 @@ excluded = [
     'scripts.setup_model', 'scripts.fit_habits', 'scripts.run_handwriting_experiment',
 ]
 
+import numpy as np
+if int(np.__version__.split('.')[0]) < 2:
+    hiddenimports = [name for name in hiddenimports if not name.startswith('numpy._core.')]
+
 # The installed torch hook gathers its DLLs, excludes development .lib/header
 # files, and keeps Python sources for TorchScript; torchvision's hook adds _C.
 a = Analysis(

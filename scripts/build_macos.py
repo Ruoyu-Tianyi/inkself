@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+import urllib.request
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -47,11 +48,18 @@ def main():
     output.mkdir(parents=True)
     scratch=ROOT/'.local/macos-build'/uuid.uuid4().hex;scratch.mkdir(parents=True)
     inventory=scratch/'analysis.json'
+    python_license=Path(sys.base_prefix)/'LICENSE.txt'
+    license_url=None
+    if not python_license.is_file():
+        license_url='https://raw.githubusercontent.com/python/cpython/v'+platform.python_version()+'/LICENSE'
+        python_license=scratch/'Python-LICENSE.txt'
+        with urllib.request.urlopen(license_url,timeout=40) as response:python_license.write_bytes(response.read())
+        if b'PYTHON SOFTWARE FOUNDATION LICENSE' not in python_license.read_bytes():raise ValueError('Unexpected Python license response')
     env=dict(os.environ,INKSELF_AI_BUILD_INVENTORY=str(inventory),MPLBACKEND='Agg',HF_HUB_OFFLINE='1')
     subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--distpath',str(scratch/'ai'),
         '--workpath',str(scratch/'ai-work'),str(ROOT/'packaging/InkselfAI.spec')],cwd=ROOT,env=env,check=True)
     ai=scratch/'ai/InkselfAI'
-    copy_runtime_licenses(ai,dependency_inventory(inventory))
+    copy_runtime_licenses(ai,dependency_inventory(inventory),python_license)
     command=[sys.executable,'-m','PyInstaller','--noconfirm','--windowed','--onedir','--name','Inkself',
         '--osx-bundle-identifier','app.inkself.desktop','--target-arch',platform.machine(),
         '--distpath',str(output),'--workpath',str(scratch/'core-work'),'--specpath',str(scratch),
@@ -69,7 +77,9 @@ def main():
     shutil.copytree(ai,resources/'ai-runtime',symlinks=True)
     # Include complete dependency notices without relicensing third-party code.
     distributions={d.metadata['Name'].lower().replace('_','-'):d for d in metadata.distributions() if d.metadata.get('Name')}
-    copy_runtime_licenses(resources,distributions)
+    copy_runtime_licenses(resources,distributions,python_license)
+    for base in (ai,resources):
+        (base/'licenses/python/SOURCE.json').write_text(json.dumps({'python':platform.python_version(),'url':license_url,'sha256':sha(python_license)},indent=2),encoding='utf-8')
     copy_offline_guides(resources)
     shutil.copyfile(ROOT/'docs/macos-guide.md',resources/'macOS-guide.md')
     validate_bundle(app)
