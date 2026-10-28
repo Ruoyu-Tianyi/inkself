@@ -14,6 +14,7 @@ from pathlib import Path, PureWindowsPath
 import re
 import shutil
 import stat
+import sys
 import tempfile
 
 
@@ -30,6 +31,14 @@ def _no_link(path: Path) -> None:
 
 def _safe_root(value, *, exists: bool) -> Path:
     path = Path(value).absolute()
+    # macOS ships these root aliases. Normalize only the exact OS mappings;
+    # user-created links anywhere below them remain forbidden.
+    if sys.platform == 'darwin':
+        for alias,target in (('/var','/private/var'),('/tmp','/private/tmp'),('/etc','/private/etc')):
+            prefix=Path(alias)
+            if path.is_relative_to(prefix) and prefix.is_symlink() and prefix.resolve()==Path(target):
+                path=Path(target)/path.relative_to(prefix)
+                break
     for item in reversed((path, *path.parents)):
         if item.exists() or item.is_symlink():
             _no_link(item)

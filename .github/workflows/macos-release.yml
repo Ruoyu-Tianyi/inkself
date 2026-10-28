@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || env.TAG }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
