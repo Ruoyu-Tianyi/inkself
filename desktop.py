@@ -5,6 +5,8 @@ import ctypes
 import json
 import multiprocessing
 import os
+import subprocess
+import signal
 import sys
 import threading
 import time
@@ -28,6 +30,13 @@ def message(text, title='Inkself'):
         ctypes.windll.user32.MessageBoxW(None, text, title, 0x40)
     else:
         print(title + ': ' + text)
+
+
+def open_folder(path):
+    if os.name == 'nt':
+        os.startfile(path)
+    else:
+        subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', str(path)])
 
 
 def main():
@@ -66,6 +75,10 @@ def main():
         lock.close()
         return 0
     server = OwnedServer(data)
+    if os.name != 'nt':
+        def terminate(signum, frame):
+            raise SystemExit(0)
+        signal.signal(signal.SIGTERM, terminate)
     try:
         url = server.start()
         if args.headless:
@@ -98,8 +111,8 @@ def main():
                 if server.active_jobs():
                     message('请等待生成任务结束，再连接模型环境。')
                     return
-                message('先选择已安装模型环境的 python.exe，再选择包含 model.safetensors 的 VATr++ 文件夹。')
-                python = window.create_file_dialog(webview.FileDialog.OPEN, file_types=('Python interpreter (*.exe)',))
+                message('先选择已安装模型环境的 Python 解释器，再选择包含 model.safetensors 的 VATr++ 文件夹。')
+                python = window.create_file_dialog(webview.FileDialog.OPEN, file_types=('Python interpreter (*.exe)',) if os.name == 'nt' else ('All files (*.*)',))
                 if not python:
                     return
                 model = window.create_file_dialog(webview.FileDialog.FOLDER)
@@ -123,14 +136,14 @@ def main():
 
             window.events.closing += closing
             def loaded():
-                write_json(data/'window-loaded.json', {'loaded':True, 'url':server.url, 'engine':'edgechromium', 'time':time.time()})
+                write_json(data/'window-loaded.json', {'loaded':True, 'url':server.url, 'engine':'edgechromium' if os.name == 'nt' else 'cocoa', 'time':time.time()})
                 if args.exit_after:
                     threading.Timer(args.exit_after, window.destroy).start()
             window.events.loaded += loaded
-            menus = [Menu('文件', [MenuAction('导入旧版字迹档案…', import_old), MenuAction('打开数据目录', lambda:os.startfile(data)), MenuAction('退出', window.destroy)]),
+            menus = [Menu('文件', [MenuAction('导入旧版字迹档案…', import_old), MenuAction('打开数据目录', lambda:open_folder(data)), MenuAction('退出', window.destroy)]),
                      Menu('模型', [MenuAction('连接本地少样本模型…', connect_model)]),
                      Menu('帮助', [MenuAction('使用说明', lambda:webbrowser.open('https://github.com/Ruoyu-Tianyi/inkself/blob/main/docs/desktop-guide.md'))])]
-            webview.start(gui='edgechromium', private_mode=False, storage_path=str(data/'webview'), menu=menus)
+            webview.start(gui='edgechromium' if os.name == 'nt' else 'cocoa', private_mode=False, storage_path=str(data/'webview'), menu=menus)
         except Exception:
             traceback.print_exc()
             # Missing WebView2 must not make the local app unusable.
@@ -151,7 +164,7 @@ def fallback(server, exit_after=0):
     tk.Label(root, text='Inkself', font=('Segoe UI', 28), bg='#f4f2eb').pack(pady=(20, 8))
     tk.Label(root, text='桌面网页组件暂不可用。可在浏览器继续使用本机工作室。\n保留此窗口，关闭后本地服务会停止。', bg='#f4f2eb').pack(pady=8)
     tk.Button(root, text='打开工作室', command=lambda:webbrowser.open(server.url), width=24).pack(pady=10)
-    tk.Button(root, text='打开数据目录', command=lambda:os.startfile(server.data), width=24).pack()
+    tk.Button(root, text='打开数据目录', command=lambda:open_folder(server.data), width=24).pack()
     def close():
         try:
             busy = bool(server.active_jobs())

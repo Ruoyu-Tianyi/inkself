@@ -1,5 +1,6 @@
 """Desktop storage and worker dispatch never depend on the installed Python."""
 import os
+from contextlib import contextmanager
 import sys
 import tempfile
 import unittest
@@ -20,9 +21,21 @@ class RuntimePaths(unittest.TestCase):
         self.environment.stop()
         self.tmp.cleanup()
 
+    @contextmanager
     def frozen(self):
-        return patch.multiple(sys, frozen=True, _MEIPASS=str(self.root / 'resources'),
-                              executable=str(self.root / 'Inkself.exe'), create=True)
+        with patch.object(sys,'platform','win32'),patch.multiple(sys,frozen=True,_MEIPASS=str(self.root/'resources'),executable=str(self.root/'Inkself.exe'),create=True):
+            yield
+
+
+    def test_macos_data_and_model_runtime_stay_outside_app(self):
+        executable=self.root/'Inkself.app/Contents/MacOS/Inkself'
+        runtime=self.root/'Inkself.app/Contents/Resources/ai-runtime/InkselfAI'
+        runtime.parent.mkdir(parents=True);runtime.write_bytes(b'synthetic')
+        with patch.object(sys,'platform','darwin'),patch.object(Path,'home',return_value=self.root/'home'),patch.multiple(sys,frozen=True,executable=str(executable),create=True):
+            expected=self.root/'home/Library/Application Support/Inkself/data'
+            self.assertEqual(paths.data_root(),expected)
+            self.assertEqual(paths.model_root(),expected/'models/vatrpp')
+            self.assertEqual(paths.model_worker(),runtime)
 
     def test_source_defaults_keep_project_paths(self):
         with patch.object(sys, 'frozen', False, create=True):

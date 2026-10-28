@@ -1,0 +1,64 @@
+name: macOS release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag
+        required: true
+        default: v0.4.0
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      MPLBACKEND: Agg
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: packaging/macos-requirements.txt
+      - run: python -m pip install -r packaging/macos-requirements.txt
+      - run: python -m unittest discover -s tests -q
+      - run: python scripts/build_macos.py --output dist/macos
+      - name: Native smoke tests
+        run: |
+          python scripts/smoke_desktop_release.py --executable dist/macos/Inkself.app/Contents/MacOS/Inkself --data-dir .local/release-smoke
+          dist/macos/Inkself.app/Contents/MacOS/Inkself --data-dir "$PWD/.local/window-smoke" --exit-after 3
+          python -c "import json; assert json.load(open('.local/window-smoke/window-loaded.json'))['loaded']"
+      - name: Package DMG
+        run: |
+          mkdir -p .local/dmg
+          cp -R dist/macos/Inkself.app .local/dmg/
+          ln -s /Applications .local/dmg/Applications
+          cp docs/macos-guide.md .local/dmg/READ-ME.md
+          hdiutil create -volname Inkself -srcfolder .local/dmg -ov -format UDZO "dist/Inkself-macOS-${{ matrix.arch }}.dmg"
+          shasum -a 256 "dist/Inkself-macOS-${{ matrix.arch }}.dmg" > "dist/Inkself-macOS-${{ matrix.arch }}.dmg.sha256"
+      - name: Upload validated release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/*.dmg dist/*.sha256 --repo "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-${{ matrix.arch }}-diagnostics
+          path: |
+            .local/release-smoke/smoke-result.json
+            .local/window-smoke/window-loaded.json
+            .local/release-smoke/logs/*.log

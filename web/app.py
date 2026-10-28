@@ -96,7 +96,7 @@ async def local_session(request:Request,call_next):
     return response
 
 @app.get('/api/session')
-def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.3.1-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
+def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.4.0-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')

@@ -33,6 +33,8 @@ def data_root() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     if is_frozen():
+        if sys.platform == 'darwin':
+            return Path.home() / 'Library/Application Support/Inkself/data'
         if (executable_directory() / 'installed-mode.json').is_file():
             local = os.environ.get('LOCALAPPDATA')
             if not local:
@@ -47,6 +49,8 @@ def model_root() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     if is_frozen():
+        if sys.platform == 'darwin':
+            return data_root() / 'models/vatrpp'
         if (executable_directory() / 'installed-mode.json').is_file():
             return data_root() / 'models/vatrpp'
         return executable_directory() / 'models/vatrpp'
@@ -58,7 +62,8 @@ def model_worker() -> Path | None:
     if override:
         return Path(override).expanduser().resolve()
     if is_frozen():
-        candidate = executable_directory() / 'ai-runtime/InkselfAI.exe'
+        candidate = (executable_directory().parent / 'Resources/ai-runtime/InkselfAI'
+                     if sys.platform == 'darwin' else executable_directory() / 'ai-runtime/InkselfAI.exe')
         if candidate.is_file():
             return candidate
     return None
