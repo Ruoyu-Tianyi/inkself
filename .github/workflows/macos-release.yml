@@ -49,7 +49,7 @@ jobs:
           ln -s /Applications .local/dmg/Applications
           cp docs/macos-guide.md .local/dmg/READ-ME.md
           hdiutil create -volname Inkself -srcfolder .local/dmg -ov -format UDZO "dist/Inkself-macOS-${{ matrix.arch }}.dmg"
-          shasum -a 256 "dist/Inkself-macOS-${{ matrix.arch }}.dmg" > "dist/Inkself-macOS-${{ matrix.arch }}.dmg.sha256"
+          shasum -a 256 "dist/Inkself-macOS-${{ matrix.arch }}.dmg" | sed 's#  dist/#  #' > "dist/Inkself-macOS-${{ matrix.arch }}.dmg.sha256"
       - name: Upload validated release assets
         env:
           GH_TOKEN: ${{ github.token }}
