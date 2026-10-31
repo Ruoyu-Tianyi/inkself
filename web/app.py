@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import FastAPI,File,Form,HTTPException,Request,UploadFile
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field,field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from PIL import Image
 from reportlab.lib.utils import ImageReader
@@ -18,6 +18,7 @@ from reportlab.pdfgen import canvas
 from .samples import process_sample
 from .capture_prompt import PROMPT_ID,LEGACY_PROMPT_ID,PROMPT_LINES,prompt_payload,write_sampling_guide
 from .runtime_paths import data_root,model_root,model_python,model_worker,model_probe_path,resource_root,worker_command
+from .runtime.spacing import normalize_spacing
 
 ROOT=resource_root()
 DATA=data_root()
@@ -171,7 +172,7 @@ async def create_profile(name:str=Form(...),file:UploadFile=File(...),prompt_id:
         data={'id':pid,'name':name,'created_at':now(),'status':'needs-review','sample':analysis,
               'sample_sha256':hashlib.sha256(content).hexdigest(),'selected_lines':[],'math_lines':[],
               'math_capture_status':'not-provided',
-              'prompt_id':prompt_id,'preferences':{'size':16,'line_spacing':1.6,'ink':'#263d57'},
+              'prompt_id':prompt_id,'preferences':{'size':16,'line_spacing':1.6,'ink':'#263d57','spacing':normalize_spacing()},
               'similarity':'not-evaluated'}
         write(folder/'profile.json',data);return data
     except (ValueError,OSError,Image.DecompressionBombError) as error:
@@ -220,6 +221,12 @@ class Generation(BaseModel):
     document_id:str|None=None
     layout_mode:Literal['standard','assignment']='standard'
     answer_header:str=Field(default='',max_length=200)
+    spacing:dict=Field(default_factory=normalize_spacing)
+
+    @field_validator('spacing',mode='before')
+    @classmethod
+    def validate_spacing(cls,value):
+        return normalize_spacing(value)
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -285,7 +292,7 @@ def generate(body:Generation):
         request={'text':text,'styles':paths,'seed':body.seed,'output':str(dest),'model':str(MODEL),
                  'style_cache':str(folder/f'style-{cache_key}.npz'),'render_mode':body.render_mode,
                  'math_enabled':body.math_enabled,'allow_supplemental_math':body.allow_supplemental_math,
-                 'word_spacing':spacing_model}
+                 'word_spacing':spacing_model,'spacing':body.spacing}
         request.update(layout_mode=body.layout_mode,answer_header=body.answer_header,answer_size=body.size,answer_spacing=body.line_spacing)
         if bank_path:request['reference_bank']=str(bank_path)
         if habit_path:request['habit_model']=str(habit_path)

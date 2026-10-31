@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-VERSION = 'inkself-document-layout-3'
+VERSION = 'inkself-document-layout-4'
 
 
 def _spacing_gaps(items, model, seed):
@@ -55,6 +55,8 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
     centered, unbreakable line. Coordinates are final raster pixels.
     """
     size = _number(preferences['size'], 'size', True)
+    from .runtime.spacing import normalize_spacing,adjust_gap
+    settings=normalize_spacing(preferences.get('spacing'))
     spacing = _number(preferences['line_spacing'], 'line spacing', True)
     if not 0 <= margin < min(page_w, page_h) / 2:
         raise ValueError('Invalid page margins.')
@@ -76,8 +78,9 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
         nonlocal pending, pending_width
         if not pending:
             return
-        from .runtime.baseline_rhythm import word_offsets
-        offsets=word_offsets([p['width'] for p in pending],[p.get('gap_before',0) for p in pending],em,preferences.get('seed',42),len(lines)) if preferences.get('baseline_variation',True) and not display else [0]*len(pending)
+        from .runtime.baseline_rhythm import word_offsets,vertical_advance
+        vary_baseline=preferences.get('baseline_variation',True)
+        offsets=word_offsets([p['width'] for p in pending],[p.get('gap_before',0) for p in pending],em,preferences.get('seed',42),len(lines),strength=settings['baseline']) if vary_baseline and not display else [0]*len(pending)
         for piece,dy in zip(pending,offsets):piece['baseline_offset']=dy
         ascent = max(nominal_ascent, max(piece['baseline']-piece['baseline_offset'] for piece in pending))
         descent = max(nominal_descent, max(piece['height']-piece['baseline']+piece['baseline_offset'] for piece in pending))
@@ -87,7 +90,7 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
         title = ' '.join(str(items[piece['item_index']].get('text', '')) for piece in pending)
         heading = explicit and not display and len(title) <= 100 and bool(re.match(r'^\d+[.)](?:\s|$)', title))
         lines.append({'pieces': pending, 'width': pending_width, 'ascent': ascent,
-                      'height': height, 'leading': max(leading, height + 5),
+                      'height': height, 'leading': max(vertical_advance(leading,settings,preferences.get('seed',42),len(lines)), height + 5),
                       'paragraph': paragraph, 'display_math': display, 'heading': heading, 'blank': False})
         pending, pending_width = [], 0
 
@@ -101,8 +104,10 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
             if pending:
                 finish(explicit=True)
             else:
-                lines.append({'pieces': [], 'width': 0, 'ascent': nominal_ascent, 'height': em,
-                              'leading': leading, 'paragraph': paragraph, 'blank': True,
+                from .runtime.baseline_rhythm import vertical_advance
+                blank_leading=vertical_advance(leading*settings['line'],settings,preferences.get('seed',42),len(lines),'paragraph')
+                lines.append({'pieces': [], 'width': 0, 'ascent': nominal_ascent, 'height': min(em,blank_leading),
+                              'leading': blank_leading, 'paragraph': paragraph, 'blank': True,
                               'heading': False, 'display_math': False})
                 paragraph += 1
             continue
@@ -138,7 +143,18 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
             paragraph += 1
             display_break_pending = True
         else:
-            gap = max(1, round(ratios[index] * em)) if ratios is not None else word_gap
+            # Even very tight, highly varied writing must retain a visible
+            # word boundary. This floor precedes the separate symbol control;
+            # source-attached punctuation still receives zero space below.
+            minimum_word_gap=max(1,round(.08*em))
+            gap = max(minimum_word_gap,round(adjust_gap(ratios[index]*em,word_spacing['mean']*em,settings,'word'))) if ratios is not None else max(minimum_word_gap,round(adjust_gap(word_gap,word_gap,settings,'word')))
+            from .runtime.symbol_style import standalone_symbol,symbol_gap
+            left=items[pending[-1]['item_index']] if pending else {}
+            # Fine symbol tracking also reaches plain "12 + 34" input. Formula
+            # blocks retain their own internal spacing; attached punctuation
+            # continues to honor the zero-space source boundary below.
+            symbol_boundary=(not item.get('math') and standalone_symbol(item.get('text',''))) or (not left.get('math') and standalone_symbol(left.get('text','')))
+            if symbol_boundary:gap=max(1,round(symbol_gap(gap,settings,preferences.get('seed',42),paragraph,index)))
             if item.get('space_before') is False:
                 gap = 0
             piece['gap_before'] = gap if pending else 0
@@ -318,7 +334,7 @@ def plan_document(items, preferences, page_w=1240, page_h=1754, margin=90, word_
         index += count
         if count < len(group):
             new_page()
-    return {'schema_version': 2, 'layout_version': VERSION, 'page_width': page_w, 'page_height': page_h, 'margin': margin,
+    return {'schema_version': 2, 'layout_version': VERSION, 'spacing':settings,'page_width': page_w, 'page_height': page_h, 'margin': margin,
             'pages': page, 'lines': planned_lines, 'placements': placements, 'warnings': warnings}
 
 
@@ -362,10 +378,14 @@ def compose_document(folder, job, generated):
         paths[index] = path
     model_info=generated.get('model',{})
     reference_mode=isinstance(model_info,dict) and model_info.get('mode')=='reference'
-    plan = plan_document(items, {**job['preferences'], 'baseline_variation':not reference_mode}, word_spacing=spacing_model)
+    # Old reference jobs had no word drift. Newly saved spacing preferences
+    # explicitly opt into a continuous 0..2 strength control, including 1.
+    plan = plan_document(items, {**job['preferences'], 'baseline_variation':not reference_mode or job['preferences'].get('spacing') is not None}, word_spacing=spacing_model)
     code = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in (
         ('document_layout.py', Path(__file__)),
         ('word_spacing.py', Path(__file__).parent / 'runtime/word_spacing.py'),
+        ('spacing.py', Path(__file__).parent / 'runtime/spacing.py'),
+        ('symbol_style.py', Path(__file__).parent / 'runtime/symbol_style.py'),
         ('baseline_rhythm.py', Path(__file__).parent / 'runtime/baseline_rhythm.py'))}
     identity = {'version': VERSION, 'code_sha256': code, 'preferences': job['preferences'],
                 'word_spacing': spacing_model,

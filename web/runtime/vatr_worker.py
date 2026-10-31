@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-6'
+RENDERER_VERSION='inkself-runtime-7'
 
 
 def _sha256(path):
@@ -28,6 +28,9 @@ def request_input_hashes(request):
         from web.runtime.word_spacing import validate_word_spacing
         validate_word_spacing(request['word_spacing'])
         hashes['word_spacing_sha256']=hashlib.sha256(json.dumps(request['word_spacing'],sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
+    if request.get('spacing') is not None:
+        from web.runtime.spacing import normalize_spacing
+        hashes['spacing_options_sha256']=hashlib.sha256(json.dumps(normalize_spacing(request['spacing']),sort_keys=True,allow_nan=False).encode()).hexdigest()
     if request.get('layout_mode')=='assignment':
         hashes['assignment_options_sha256']=hashlib.sha256(json.dumps({key:request.get(key) for key in ('layout_mode','answer_header','answer_size','answer_spacing')},sort_keys=True).encode()).hexdigest()
     return hashes
@@ -43,13 +46,14 @@ def verify_request_inputs(request):
 
 def renderer_provenance(request,inputs):
     mode=request.get('render_mode','model')
-    names=['vatr_worker.py','word_spacing.py']
+    names=['vatr_worker.py','word_spacing.py','spacing.py']
     if mode!='model':names.append('reference_renderer.py')
     if mode=='learned-habits':names.extend(['habit_model.py','symbol_style.py','digit_style.py'])
     if mode=='model-calibrated':names.extend(['symbol_style.py','digit_style.py'])
     if mode in ('reference','learned-habits'):names.extend(['math_syntax.py','document_input.py'])
-    if request.get('math_enabled'):names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py'])
-    if request.get('layout_mode')=='assignment':names.extend(['assignment.py','baseline_rhythm.py'])
+    if request.get('math_enabled') or request.get('layout_mode')=='assignment':
+        names.extend(['math_renderer.py','math_strokes.py','math_glyphs.py','symbol_style.py','digit_style.py'])
+    if request.get('layout_mode')=='assignment':names.extend(['assignment.py','baseline_rhythm.py','../markdown_document.py'])
     source_hashes={name:_sha256(Path(__file__).parent/name) for name in names}
     renderer_hash=hashlib.sha256(json.dumps(source_hashes,sort_keys=True).encode()).hexdigest()
     identity={'text':request['text'],'seed':request['seed'],'render_mode':mode,
@@ -70,6 +74,8 @@ def run(request_path):
     from web.runtime.reference_renderer import load_bank,reference_token,calibrate_model_image
     mode=request.get('render_mode','model')
     if mode not in ('model','model-calibrated','reference','learned-habits'):raise ValueError('Unknown handwriting renderer.')
+    from web.runtime.spacing import normalize_spacing
+    settings=normalize_spacing(request.get('spacing'))
     input_hashes=verify_request_inputs(request)
     bank=load_bank(request['reference_bank']) if mode in ('model-calibrated','reference','learned-habits') else None
     habit=None
@@ -98,12 +104,12 @@ def run(request_path):
         for token in tokens:
             if token.get('newline'):result.append({'newline':True});continue
             if 'math' in token:
-                image,metadata=render_math(token['math'],bank,habit,request['seed'],len(result),request.get('allow_supplemental_math',False))
+                image,metadata=render_math(token['math'],bank,habit,request['seed'],len(result),request.get('allow_supplemental_math',False),spacing=settings)
                 text=token['source']
                 metadata.update(math=True,display_math=token['display_math'])
             else:
                 text=token['text']
-                image,metadata=habit_token(bank,habit,text,request['seed'],len(result)) if habit else reference_token(bank,text)
+                image,metadata=habit_token(bank,habit,text,request['seed'],len(result),spacing=settings) if habit else reference_token(bank,text,spacing=settings,seed=request['seed'],occurrence=len(result))
             name=f'word-{len(result):04}.png';image.save(output/name)
             result.append({'text':text,'file':name,'width':image.width,'height':image.height,
                            'space_before':token.get('space_before',True),**metadata})

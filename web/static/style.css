@@ -3,3 +3,28 @@
 .math-toggle{display:flex;gap:.55rem;align-items:center;margin:1rem 0;font-size:.9rem}.math-toggle input{width:16px;height:16px;flex:0 0 auto}#math-settings{border-left:2px solid #c6cec9;padding:0 0 .5rem 1rem;margin:.8rem 0}#math-settings code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem;padding:.7rem;background:#eeeee8}#math-notice{padding:.8rem;background:#f2ead5;border-left:2px solid #a3834a}
 .getting-started{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:24px 28px;margin:0 0 32px;background:#e8ece5;border:1px solid #d7dfd1}.getting-started h2{font-size:25px;margin:4px 0 12px}.getting-started p{max-width:760px;line-height:1.7}.getting-started ol{display:flex;gap:28px;flex-wrap:wrap;padding-left:18px;color:#797d73;font-size:13px}.getting-started .done{color:#3d5943}.getting-started .done::marker{color:#3d5943}.getting-started .primary{flex-shrink:0}.markdown-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:24px 0 12px}.markdown-upload{position:relative;cursor:pointer;display:inline-flex;padding:10px 14px}.markdown-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}.markdown-info{flex-basis:100%;font-size:13px;line-height:1.7;background:#f0e9d7;padding:12px 14px;border-left:2px solid #a58c51;overflow-wrap:anywhere}@media(max-width:760px){.getting-started{align-items:flex-start;flex-direction:column;padding:20px}.getting-started ol{display:block;line-height:2}.getting-started h2{font-size:23px}}
 .math-capture{margin-top:24px;border-top:1px solid var(--line);padding-top:20px}.math-capture h3{font-size:16px;font-weight:500;margin:0 0 12px}.math-prompt-lines{padding:12px 16px;background:#ebece3;border:1px solid var(--line)}.math-prompt-lines p{font-family:Georgia,"Times New Roman",serif;font-size:17px;line-height:1.9;margin:6px 0;overflow-wrap:anywhere}.line-tile .line-purpose-label{font-size:12px;margin-top:8px}.line-tile .line-purpose{width:100%;font-size:12px;margin:6px 0 0}.line-tile:has(.line-purpose){display:flex;flex-direction:column;align-items:stretch;gap:0}.line-tile:has(.line-purpose) img{max-width:100%;width:100%;object-fit:contain}.line-tile:has(.line-purpose:focus-visible){outline:2px solid var(--green);outline-offset:2px}
+
+.spacing-panel{border-top:1px solid var(--line);padding:20px 0;margin:0 0 12px;min-width:0}
+.spacing-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.spacing-heading h3{margin:0;font-size:13px;font-weight:500}
+.spacing-heading button{min-height:32px;flex-shrink:0}
+.spacing-panel .muted{font-size:11px;line-height:1.8}
+.spacing-mode-help{padding:10px 12px;border-left:2px solid #a6b49a;background:#e9ede2}
+.spacing-details{margin-top:15px;border-top:1px solid var(--line);padding-top:12px}
+.spacing-details summary{font-size:12px;cursor:pointer;color:var(--green);padding:6px 0;min-height:32px}
+.spacing-details summary:focus-visible{outline:2px solid #7f9272;outline-offset:3px}
+.spacing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px;margin:18px 0 6px}
+.spacing-control{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;font-size:11px;min-width:0}
+.spacing-control output{font-variant-numeric:tabular-nums;color:var(--green);float:none}
+.spacing-control input[type=range]{grid-column:1/-1;accent-color:var(--green);width:100%;margin:0;min-width:0;min-height:24px;cursor:pointer}
+.spacing-control input[type=range]:focus-visible{outline:2px solid #7f9272;outline-offset:2px}
+.spacing-control.unavailable{color:#777c72}
+.spacing-control.unavailable output{color:#777c72}
+.spacing-control input:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:1000px) and (min-width:801px){.spacing-grid{grid-template-columns:1fr}}
+@media(max-width:400px){.spacing-grid{gap:18px 16px}.spacing-control{font-size:10px}}
+@media(min-width:801px){
+  .preview-panel{position:sticky;top:24px;align-self:start;display:flex;flex-direction:column;max-height:calc(100dvh - 48px);min-height:min(535px,calc(100dvh - 48px));overflow:hidden}
+  .preview-toolbar,#download-bar{flex-shrink:0}
+  #output-pages{min-height:0;flex:1;max-height:none;overflow:auto}
+}

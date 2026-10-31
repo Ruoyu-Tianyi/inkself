@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image,ImageDraw,ImageOps
 
-VERSION='assignment-layout-1'
+VERSION='assignment-layout-2'
 PAGE_W,PAGE_H,MARGIN=1240,1754,80
 WIDTH=PAGE_W-2*MARGIN
 
@@ -123,8 +123,11 @@ def preflight_assignment(source,bank,allow_supplemental=False,header=''):
 
 
 class Writer:
-    def __init__(self,bank,habit,spacing,seed,allow,line_spacing=1.6):
+    def __init__(self,bank,habit,spacing,seed,allow,line_spacing=1.6,spacing_options=None):
+        from .spacing import normalize_spacing
         self.bank,self.habit,self.spacing,self.seed,self.allow=bank,habit,spacing,seed,allow
+        self.settings=normalize_spacing(spacing_options)
+        self.explicit_spacing=spacing_options is not None
         self.counter=0;self.references=set();self.supplements=set();self.baseline_lines=[]
         self.leading_factor=1.18*line_spacing/1.6
 
@@ -133,7 +136,7 @@ class Writer:
         from .reference_renderer import reference_token
         from .math_glyphs import supplemental_glyph
         if all(c in self.bank['glyphs'] for c in text):
-            im,meta=habit_token(self.bank,self.habit,text,self.seed,self.counter) if self.habit else reference_token(self.bank,text)
+            im,meta=habit_token(self.bank,self.habit,text,self.seed,self.counter,spacing=self.settings) if self.habit else reference_token(self.bank,text,spacing=self.settings,seed=self.seed,occurrence=self.counter)
             self.references.update(meta.get('references',[]));return im,meta['baseline'],meta.get('em_height',32)
         pieces=[]
         for part in re.findall(r'[A-Za-z0-9+%=.,;?:×÷-]+|.',text):
@@ -167,7 +170,7 @@ class Writer:
         for token in document_tokens(_inline(text),True):
             if token.get('newline'):result.append(None);continue
             if 'math' in token:
-                im,meta=render_math(token['math'],self.bank,self.habit,self.seed,self.counter,self.allow)
+                im,meta=render_math(token['math'],self.bank,self.habit,self.seed,self.counter,self.allow,spacing=self.settings)
                 base,original_em=meta['baseline'],meta['em_height'];self.supplements.update(meta['supplemental_math_glyphs']);self.references.update(meta['references'])
             else:im,base,original_em=self.native(token['text'])
             bounds=ImageOps.invert(im).point(lambda v:255 if v>45 else 0).getbbox()
@@ -175,32 +178,38 @@ class Writer:
             im=im.crop((max(0,bounds[0]-1),0,min(im.width,bounds[2]+1),im.height))
             f=em/original_em
             im=im.resize((max(1,round(im.width*f)),max(1,round(im.height*f))),Image.Resampling.LANCZOS)
-            result.append((im,round(base*f),token['space_before']));self.counter+=1
+            result.append((im,round(base*f),token['space_before'],token.get('text','')));self.counter+=1
         return result
 
     def paragraph(self,text,em=39,width=WIDTH):
         from .word_spacing import sample_word_gaps
+        from .spacing import adjust_gap
+        from .baseline_rhythm import vertical_advance
+        from .symbol_style import standalone_symbol,symbol_gap
         if len(text)>100:
             text=re.sub(r';\s+(?=[A-Za-z]+_[A-Za-z])',';\n',text)
         tokens=self.tokens(text,em);gaps=sample_word_gaps(self.spacing,len(tokens),self.seed,self.counter)
         lines=[];pending=[];used=0
         def finish_line():
             from .baseline_rhythm import word_offsets
-            offsets=word_offsets([p[0].width for p in pending],[p[2] for p in pending],em,self.seed,len(self.baseline_lines)) if self.habit else [0]*len(pending)
+            offsets=word_offsets([p[0].width for p in pending],[p[2] for p in pending],em,self.seed,len(self.baseline_lines),strength=self.settings['baseline']) if self.habit or self.explicit_spacing else [0]*len(pending)
             self.baseline_lines.append({'em':em,'offsets_px':offsets})
             lines.append(self.join(pending,offsets))
         for index,token in enumerate(tokens):
             if token is None:
                 if pending:finish_line();pending=[];used=0
                 continue
-            im,base,space=token
+            im,base,space,label=token
             if im.width>width:raise ValueError('连续公式或单词过宽，请在运算符前后加空格或拆行。')
-            gap=round(gaps[index]*em) if pending and space else 0
+            gap=max(1,round(.08*em),round(adjust_gap(gaps[index]*em,self.spacing['mean']*em,self.settings,'word'))) if pending and space else 0
+            previous_label=tokens[index-1][3] if index and tokens[index-1] else ''
+            if gap and (standalone_symbol(label) or standalone_symbol(previous_label)):
+                gap=max(1,round(symbol_gap(gap,self.settings,self.seed,self.counter,index)))
             if pending and used+gap+im.width>width:finish_line();pending=[];used=0;gap=0
             pending.append((im,base,gap));used+=gap+im.width
         if pending:finish_line()
         if not lines:raise ValueError('空白段落。')
-        leading=[max(round(em*self.leading_factor),im.height+6) for im,_ in lines]
+        leading=[max(vertical_advance(em*self.leading_factor,self.settings,self.seed,len(self.baseline_lines)-len(lines)+i),im.height+6) for i,(im,_) in enumerate(lines)]
         image=Image.new('L',(width,sum(leading[:-1])+lines[-1][0].height),255);y=0
         for (im,_),advance in zip(lines,leading):image.paste(im,(0,y));y+=advance
         return image
@@ -231,7 +240,7 @@ class Writer:
 
 def render_assignment(request,bank,habit,spacing,output):
     document=preflight_assignment(request['text'],bank,request.get('allow_supplemental_math',False),request.get('answer_header',''))
-    writer=Writer(bank,habit,spacing,request['seed'],request.get('allow_supplemental_math',False),request.get('answer_spacing',1.6))
+    writer=Writer(bank,habit,spacing,request['seed'],request.get('allow_supplemental_math',False),request.get('answer_spacing',1.6),request.get('spacing'))
     # Match ordinary size16 to the approximately14 setting used for answer sheets.
     em=max(28,min(55,round(request.get('answer_size',16)*2.45)))
     entries=[]
@@ -258,9 +267,9 @@ def render_assignment(request,bank,habit,spacing,output):
             else:save(image,block,text=block['text'])
         elif kind=='choices':
             for start in range(0,len(block['choices']),4):
-                image=Image.new('L',(WIDTH,round(em*1.4)),255)
-                for col,(number,answer) in enumerate(block['choices'][start:start+4]):
-                    cell=writer.paragraph(number+'. '+answer,em,WIDTH//4-12);image.paste(cell,(col*WIDTH//4+8,6))
+                cells=[writer.paragraph(number+'. '+answer,em,WIDTH//4-12) for number,answer in block['choices'][start:start+4]]
+                image=Image.new('L',(WIDTH,max(round(em*1.4),max(cell.height for cell in cells)+12)),255)
+                for col,cell in enumerate(cells):image.paste(cell,(col*WIDTH//4+8,6))
                 save(image,block)
         elif kind=='table':
             rows=writer.table(block,max(26,round(em*.78)))
@@ -281,7 +290,7 @@ def render_assignment(request,bank,habit,spacing,output):
     for digit in '0123456789':
         im=writer.paragraph(digit,22,100);box=ImageOps.invert(im).getbbox();im=im.crop((0,0,box[2]+1,im.height))
         filename=f'footer-{digit}.png';im.save(output/filename);footer_digits[digit]=filename
-    metadata={'version':VERSION,'baseline_rhythm':{'method':'bounded procedural line drift and correlated word lifts','lines':writer.baseline_lines},'entries':entries,'footer_digits':footer_digits,'document':document,'references':sorted(writer.references),
+    metadata={'version':VERSION,'spacing':writer.settings,'baseline_rhythm':{'method':'bounded procedural line drift and correlated word lifts','lines':writer.baseline_lines},'entries':entries,'footer_digits':footer_digits,'document':document,'references':sorted(writer.references),
               'supplemental_math_glyphs':sorted(writer.supplements),'em':em}
     (output/'assignment.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf-8')
     return metadata
@@ -290,12 +299,20 @@ def render_assignment(request,bank,habit,spacing,output):
 def compose_assignment(folder,job,generated):
     from reportlab.pdfgen import canvas
     from reportlab.lib.utils import ImageReader
+    from .spacing import normalize_spacing
+    from .baseline_rhythm import vertical_advance
     folder=Path(folder).resolve();meta=generated['assignment_layout'];entries=meta['entries'];capacity=PAGE_H-2*MARGIN-32
+    settings=normalize_spacing(job['preferences'].get('spacing',meta.get('spacing')))
+    seed=job['preferences'].get('seed',42)
+    def after_gap(index):
+        entry=entries[index]
+        kind='line' if entry['role'] in ('table','tree','choices') else 'paragraph'
+        return vertical_advance(12,settings,seed,index,kind)
     pages=[[]];y=MARGIN;placements=[];warnings=[]
     def next_page():
         nonlocal y
         if pages[-1]:pages.append([]);y=MARGIN
-    def group_height(start,end):return sum(e['height']+12 for e in entries[start:end])
+    def group_height(start,end):return sum(entries[i]['height']+after_gap(i) for i in range(start,end))
     for index,entry in enumerate(entries):
         if entry['height']>capacity:raise ValueError('答卷块高于可打印区域，请拆分。')
         if entry['role']=='heading':
@@ -312,15 +329,16 @@ def compose_assignment(folder,job,generated):
             if need<=capacity and y+need>PAGE_H-MARGIN-32:next_page()
         if entry.get('table_header'):
             # Keep the header with at least the first data row.
-            need=entry['height']+12+(entries[index+1]['height'] if index+1<len(entries) else 0)
+            need=entry['height']+after_gap(index)+(entries[index+1]['height'] if index+1<len(entries) else 0)
             if y+need>PAGE_H-MARGIN-32:next_page()
         if y+entry['height']>PAGE_H-MARGIN-32:
             next_page()
             if entry['role']=='table' and not entry.get('table_header'):
                 header=entries[entry['table_id']]
-                if header['height']+12+entry['height']>capacity:raise ValueError('表格单行连同表头过高，请缩短单元格内容。')
-                pages[-1].append((header,y));placements.append({'page':len(pages),'y':y,**header,'repeated_table_header':True});y+=header['height']+12
-        pages[-1].append((entry,y));placements.append({'page':len(pages),'y':y,**entry});y+=entry['height']+12
+                header_gap=after_gap(entry['table_id'])
+                if header['height']+header_gap+entry['height']>capacity:raise ValueError('表格单行连同表头过高，请缩短单元格内容。')
+                pages[-1].append((header,y));placements.append({'page':len(pages),'y':y,**header,'repeated_table_header':True});y+=header['height']+header_gap
+        pages[-1].append((entry,y));placements.append({'page':len(pages),'y':y,**entry,'gap_after':after_gap(index)});y+=entry['height']+after_gap(index)
     ink=job['preferences']['ink']
     pdf=canvas.Canvas(str(folder/'result.pdf'),pagesize=(595.2756,841.8898),invariant=1)
     pdf.setTitle('Inkself handwritten answer sheet')
@@ -338,11 +356,12 @@ def compose_assignment(folder,job,generated):
             path=(folder/meta['footer_digits'][digit]).resolve()
             if path.parent!=folder:raise ValueError('Invalid footer image path.')
             with Image.open(path) as image:digits.append(image.convert('L').copy())
-        x=(PAGE_W-sum(d.width+2 for d in digits))//2
-        for digit in digits:page.paste(ImageOps.colorize(digit,black=ink,white='white'),(x,PAGE_H-57));x+=digit.width+2
+        footer_gap=max(1,round(2*settings['number']))
+        x=(PAGE_W-sum(d.width+footer_gap for d in digits))//2
+        for digit in digits:page.paste(ImageOps.colorize(digit,black=ink,white='white'),(x,PAGE_H-57));x+=digit.width+footer_gap
         page.save(folder/f'page-{n:03}.png');pdf.drawImage(ImageReader(page),0,0,width=595.2756,height=841.8898);pdf.showPage()
     pdf.save()
-    layout={'schema_version':1,'version':VERSION,'pages':len(pages),'placements':placements,'warnings':warnings,
+    layout={'schema_version':1,'version':VERSION,'spacing':settings,'pages':len(pages),'placements':placements,'warnings':warnings,
         'source_sha256':meta['document']['source_sha256'],'formatting_only':True}
     (folder/'layout.json').write_text(json.dumps(layout,ensure_ascii=False,indent=2),encoding='utf-8')
     (folder/'report.json').write_text(json.dumps({'model':generated['model'],'layout':layout,'assignment':meta,

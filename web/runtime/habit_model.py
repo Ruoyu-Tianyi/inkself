@@ -180,14 +180,16 @@ def _endpoint(image,baseline,side,target_offset=-5,scale=3):
  xx=xx[keep];yy=yy[keep];edge=xx.max() if side=='right' else xx.min();values=yy[xx==edge]
  return float(edge),float(values[np.argmin(np.abs(values-(baseline+target_offset)))])
 
-def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
- from .symbol_style import SYMBOLS,render_symbol,symbol_token,fit_percent_to_canvas
+def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True,spacing=None):
+ from .symbol_style import SYMBOLS,render_symbol,symbol_token,fit_percent_to_canvas,symbol_gap
  from .digit_style import numeric_token,render_digit,digit_gap
+ from .spacing import normalize_spacing
+ settings=normalize_spacing(spacing)
  if missing_characters(bank,text):raise ValueError('Missing reviewed glyphs.')
  if not any(c.isalpha() for c in text):
-  if any(c in "0123456789" for c in text):return numeric_token(bank,text,seed,variant)
-  if any(c in SYMBOLS for c in text):return symbol_token(bank,text,seed,variant)
-  return reference_token(bank,text,prefer_words=False)
+  if any(c in "0123456789" for c in text):return numeric_token(bank,text,seed,variant,spacing=settings)
+  if any(c in SYMBOLS for c in text):return symbol_token(bank,text,seed,variant,spacing=settings)
+  return reference_token(bank,text,prefer_words=False,spacing=settings,seed=seed,occurrence=variant)
  digest=hashlib.sha256(f'{seed}:{variant}:{text}'.encode()).digest();rng=np.random.default_rng(int.from_bytes(digest[:8],'little'))
  # Retain learned high-resolution strokes until the final PDF compositor resamples.
  scale=3;pieces=[];provenance=[];symbol_variants=[];digit_variants=[];bearings=[];advances=[]
@@ -207,12 +209,19 @@ def habit_token(bank,model,text,seed=42,variant=0,connect=True,allographs=True):
   base=float(rec['baseline'])*hy;pieces.append((char,im,base));provenance.append(rec['sha256']);bearings.append(0.);advances.append(im.width/scale)
  baseline=math.ceil(max(p[2] for p in pieces))+4
  height=baseline+math.ceil(max(im.height/scale-base for _,im,base in pieces))+4
- positions=[];x=4.;slope=.35*float(rng.choice(model.get('baseline_slopes') or [0]))
+ positions=[];x=4.;slope=.35*float(rng.choice(model.get('baseline_slopes') or [0]))*settings['baseline']
  for i,(char,im,base) in enumerate(pieces):
   positions.append((x-bearings[i],baseline-base));pair=text[i:i+2]
   gap=0 if should_connect(model,pair) else 1
-  if not char.isalpha() or (i+1<len(text) and not text[i+1].isalpha()):gap=3
-  if len(pair)==2 and all(c in "0123456789" for c in pair):gap=digit_gap(seed,variant,i)
+  if len(pair)==2 and pair.isalpha():
+   # Tightening never overlays two captured ink boxes. Extra tracking also
+   # applies to connected pairs, whose zero default gap cannot be multiplied.
+   mean=gap
+   extra=max(0,settings['variation']-1)
+   sampled=mean+(float(rng.uniform(-.3,.3))*extra if extra else 0)
+   gap=max(0,(sampled-mean)*settings['variation']+mean*settings['letter']+max(0,settings['letter']-1)*2)
+  if not char.isalpha() or (i+1<len(text) and not text[i+1].isalpha()):gap=symbol_gap(3,settings,seed,variant,i)
+  if len(pair)==2 and all(c in "0123456789" for c in pair):gap=digit_gap(seed,variant,i,settings)
   x+=advances[i]+gap
  positions=[(px,py+float(np.clip(slope*(px-x/2),-.8,.8))) for px,py in positions]
  result=Image.new('L',((math.ceil(x)+(7 if symbol_variants else 4))*scale,height*scale),255)

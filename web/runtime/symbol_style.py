@@ -18,6 +18,26 @@ SYMBOLS = frozenset('%+-=×÷.,;:?!')
 VERSION = 'bounded-symbols-1'
 
 
+def standalone_symbol(text):
+    """A prose token made only of punctuation/operators, excluding whitespace."""
+    return bool(text) and all(not char.isalnum() and not char.isspace() for char in text)
+
+
+def symbol_gap(base, settings, seed=42, occurrence=0, index=0):
+    """Adjust operator/punctuation spacing with bounded opt-in extra rhythm.
+
+    Historical symbol gaps were constant, so the natural (1) setting preserves
+    them. Stronger variation adds new deterministic differences between gaps.
+    """
+    from .spacing import adjust_gap
+    if settings['variation']<=1:
+        return adjust_gap(base,base,settings,'symbol')
+    key=hashlib.sha256(f'symbol-gap:{seed}:{occurrence}:{index}'.encode()).digest()
+    noise=np.random.default_rng(int.from_bytes(key[:8],'little')).uniform(-1,1)
+    sample=base*(1+.22*max(0,settings['variation']-1)*float(noise))
+    return adjust_gap(sample,base,settings,'symbol')
+
+
 def topology(image):
     mask = (np.asarray(image) < 170).astype('uint8')
     components = cv2.connectedComponents(np.pad(mask, 1), connectivity=8)[0] - 1
@@ -206,8 +226,10 @@ def fit_percent_to_canvas(bank, image, meta, canvas_size, position, seed, occurr
     return image, {**meta, 'canvas_guard_passed': legible(image), 'variation_attempt': 'normalized-base'}
 
 
-def symbol_token(bank, text, seed=42, occurrence=0, vary_digits=False):
+def symbol_token(bank, text, seed=42, occurrence=0, vary_digits=False, spacing=None):
     """Compose nonalphabetic tokens without applying letter geometry to digits."""
+    from .spacing import normalize_spacing,adjust_gap
+    settings=normalize_spacing(spacing)
     pieces = []
     variants = []
     references = []
@@ -225,10 +247,16 @@ def symbol_token(bank, text, seed=42, occurrence=0, vary_digits=False):
             image = source.resize((source.width*SCALE, source.height*SCALE), Image.Resampling.LANCZOS)
             baseline, bearing = float(record['baseline']), 0.
             advance = max(source.width+1, float(record.get('advance', source.width+2)))
+        if index+1 < len(text):
+            logical_width=meta['layout_width'] if char in SYMBOLS or (vary_digits and char.isascii() and char.isdigit()) else source.width
+            kind='number' if char.isdigit() and text[index+1].isdigit() else 'symbol'
+            old_gap=advance-logical_width
+            gap=symbol_gap(old_gap,settings,seed,occurrence,index) if kind=='symbol' else adjust_gap(old_gap,old_gap,settings,kind)
+            advance=logical_width+gap
         if vary_digits and char.isdigit() and index+1 < len(text) and text[index+1].isdigit():
             from .digit_style import digit_gap
-            gap = digit_gap(seed, occurrence, index)
-            advance += gap - max(1., float(record.get('advance', source.width+2))-source.width)
+            gap = digit_gap(seed, occurrence, index,settings)
+            advance = logical_width+gap
             digit_gaps.append(gap)
         pieces.append((image, baseline, bearing, advance))
         references.append(record['sha256'])

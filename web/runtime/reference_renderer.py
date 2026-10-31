@@ -42,7 +42,18 @@ def _image(bank,record):
     with Image.open(_child(bank['_root'],record['file'])) as source:return source.convert('L').copy()
 
 
-def reference_token(bank,text,prefer_words=True):
+def reference_token(bank,text,prefer_words=True,spacing=None,seed=42,occurrence=0):
+    from .spacing import normalize_spacing,adjust_gap
+    settings=normalize_spacing(spacing)
+    def boundary_kind(left,right):
+        return 'number' if left.isdigit() and right.isdigit() else 'letter' if left.isalpha() and right.isalpha() else 'symbol'
+    kinds={boundary_kind(left,right) for left,right in zip(text,text[1:])}
+    extra=max(0,settings['variation']-1)
+    custom=any(settings[key]!=1 for key in kinds) or bool(kinds and extra)
+    # A captured word has no reviewed internal glyph positions. Changing its
+    # internal gaps requires composing its reviewed characters, never stretching
+    # or cutting the connected original raster.
+    if custom:prefer_words=False
     records=bank.get('words',{})
     if prefer_words and text in records:
         record=records[text];image=_image(bank,record)
@@ -51,6 +62,7 @@ def reference_token(bank,text,prefer_words=True):
     # Longest known fragments retain observed connections; no synthetic pen bridges.
     fragments=sorted([word for word in records if len(word)>=2],key=len,reverse=True) if prefer_words else []
     pieces=[];offset=0
+    rng=np.random.default_rng(int.from_bytes(hashlib.sha256(f'reference-spacing:{seed}:{occurrence}:{text}'.encode()).digest()[:8],'little'))
     numeric=bool(re.fullmatch(r'[0-9.+%\-=]+',text))
     horizontal=float(bank.get('letter_width_scale',1)) if not numeric else 1.
     if not .3<=horizontal<=1.5:raise ValueError('Invalid reference letter width scale.')
@@ -65,6 +77,14 @@ def reference_token(bank,text,prefer_words=True):
             char_scale=horizontal if char.isalpha() else 1.
             width=max(1,round(image.width*char_scale));image=image.resize((width,image.height),Image.Resampling.LANCZOS)
             advance=max(width+1,float(record.get('advance',image.width+2))*char_scale)
+            if custom and offset+1<len(text):
+                right=text[offset+1]
+                kind=boundary_kind(char,right)
+                mean=advance-width
+                # New adjustable tracking stays positive, with reproducible
+                # variation only when explicitly requested away from natural.
+                sampled=mean+float(rng.uniform(-.3,.3))*mean*extra if extra else mean
+                advance=width+adjust_gap(sampled,mean,settings,kind)
             pieces.append((image,float(record['baseline']),advance,record['sha256']));offset+=1
     ascent=max(p[1] for p in pieces);descent=max(p[0].height-p[1] for p in pieces)
     baseline=math.ceil(ascent)+2;height=max(4,math.ceil(ascent+descent)+4)

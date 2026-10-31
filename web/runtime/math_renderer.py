@@ -32,11 +32,14 @@ def _scaled(box, factor):
     return Box(box.image.resize((max(1,round(box.image.width*factor)),max(1,round(box.image.height*factor))),Image.Resampling.LANCZOS),round(box.baseline*factor))
 
 
-def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=False):
+def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=False, spacing=None):
     from .habit_model import habit_token
     from .reference_renderer import reference_token
     from .math_glyphs import supplemental_glyph
     from .math_strokes import draw_fence,draw_radical,estimate_style
+    from .spacing import normalize_spacing,adjust_gap
+    from .symbol_style import symbol_gap
+    settings=normalize_spacing(spacing)
     supplemental = set()
     references = set()
     counter = 0
@@ -50,7 +53,7 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
         if char.isspace():
             return Box(Image.new('L',(4*SCALE,1),255),0)
         if char in bank['glyphs']:
-            image,meta = habit_token(bank,model,char,seed,variant*10000+counter) if model else reference_token(bank,char,False)
+            image,meta = habit_token(bank,model,char,seed,variant*10000+counter,spacing=settings) if model else reference_token(bank,char,False,spacing=settings,seed=seed,occurrence=variant*10000+counter)
             factor = 96/float(meta.get('em_height',32))
             image = image.resize((max(1,round(image.width*factor)),max(1,round(image.height*factor))),Image.Resampling.LANCZOS)
             baseline = round(meta.get('baseline',26)*factor)
@@ -71,7 +74,7 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
         placements.append({'glyph':char,'source':'supplemental' if char in supplemental else 'personal','occurrence':counter})
         # Relations and binary operators have a modest handwritten gap.
         if char in '=+-×÷±≤≥≠→∈':
-            pad=3*SCALE
+            pad=max(1,round(symbol_gap(3*SCALE,settings,seed,variant,counter)))
             padded=Image.new('L',(image.width+pad*2,image.height),255);padded.paste(image,(pad,0));image=padded
         return Box(image,baseline)
 
@@ -84,10 +87,19 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
         if kind=='sequence':
             children=node['children']; boxes=[render(child,depth+1) for child in children]
             from .digit_style import digit_gap
-            gaps=[round(digit_gap(seed,variant*10000+counter,i)*SCALE) if model and a.get('type')==b.get('type')=='glyph' and a.get('text','') in '0123456789' and b.get('text','') in '0123456789' else 2 for i,(a,b) in enumerate(zip(children,children[1:]))]
+            gaps=[]
+            for i,(a,b) in enumerate(zip(children,children[1:])):
+                left,right=a.get('text',''),b.get('text','')
+                both_glyphs=a.get('type')==b.get('type')=='glyph'
+                digits=both_glyphs and left in '0123456789' and right in '0123456789' and left and right
+                if model and digits:gap=digit_gap(seed,variant*10000+counter,i,settings)*SCALE
+                else:
+                    kind='number' if digits else 'letter' if both_glyphs and left.isalpha() and right.isalpha() else 'symbol'
+                    gap=symbol_gap(2,settings,seed,variant*10000+counter,i) if kind=='symbol' else adjust_gap(2,2,settings,kind)
+                gaps.append(max(1,round(gap)))
             return _join(boxes,gaps)
         if kind=='named_operator':
-            box=_join([glyph(c) for c in node['text']],gap=1)
+            box=_join([glyph(c) for c in node['text']],gap=max(1,round(settings['letter'])))
             return _scaled(box,1.4) if node.get('limits') and node['text'] in ('∑','∏','∫') else box
         if kind=='fraction':
             top=_scaled(render(node['numerator'],depth+1),.86)
@@ -149,7 +161,7 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
                 structural_strokes.append({'kind':'fence','glyph':char,
                     'source':'personal' if char in bank['glyphs'] else 'supplemental',**stroke_meta})
                 parts.append(Box(im,body.baseline+4+stroke_meta['top_padding_px']))
-            return _join(parts,gap=3)
+            return _join(parts,gap=max(1,round(symbol_gap(3,settings,seed,variant,counter))))
         raise ValueError('Unsupported math node: '+str(kind))
 
     box=render(ast)
@@ -159,5 +171,5 @@ def render_math(ast, bank, model=None, seed=42, variant=0, allow_supplemental=Fa
     return image,{'baseline':box.baseline+pad,'em_height':96,'renderer':VERSION,
         'supplemental_math_glyphs':sorted(supplemental),'references':sorted(references),
         'math_glyphs':placements,'math_ast':ast,
-        'math_strokes':structural_strokes,
+        'math_strokes':structural_strokes,'spacing':settings,
         'limits':'Structure is typeset from explicit math input; supplemental glyphs are not learned personal handwriting.'}
