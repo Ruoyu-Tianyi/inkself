@@ -17,6 +17,7 @@ const InkselfSpacing = (() => {
   const fineKeys = ['letter', 'number', 'symbol'];
   let current = {preset: 'natural', ...natural};
   let mounted = false;
+  let presetButtons = [];
 
   function normalize(saved) {
     const source = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
@@ -35,7 +36,10 @@ const InkselfSpacing = (() => {
 
   function render() {
     if (!mounted) return;
-    document.getElementById('spacing-preset').value = current.preset;
+    for (const button of presetButtons) {
+      button.setAttribute('aria-pressed', String(button.dataset.spacingPreset === current.preset));
+    }
+    document.getElementById('spacing-custom').hidden = current.preset !== 'custom';
     for (const key of Object.keys(ranges)) {
       const input = document.getElementById('spacing-' + key);
       input.value = current[key];
@@ -93,10 +97,10 @@ const InkselfSpacing = (() => {
       label.append(name, output, input);
       grid.append(label);
     }
-    document.getElementById('spacing-preset').addEventListener('change', event => {
-      if (Object.hasOwn(presets, event.target.value)) restore({preset: event.target.value});
-    });
-    document.getElementById('spacing-reset').addEventListener('click', () => restore({preset: 'natural'}));
+    presetButtons = document.querySelectorAll('[data-spacing-preset]');
+    for (const button of presetButtons) {
+      button.addEventListener('click', () => restore({preset: button.dataset.spacingPreset}));
+    }
     mounted = true;
     render();
     modeChanged(document.getElementById('render-mode').value);

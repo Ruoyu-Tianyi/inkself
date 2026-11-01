@@ -7,7 +7,15 @@
 .spacing-panel{border-top:1px solid var(--line);padding:20px 0;margin:0 0 12px;min-width:0}
 .spacing-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
 .spacing-heading h3{margin:0;font-size:13px;font-weight:500}
-.spacing-heading button{min-height:32px;flex-shrink:0}
+#spacing-custom{font-size:11px;color:var(--green)}
+.spacing-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.spacing-presets button{position:relative;padding:10px 22px 10px 12px;text-align:left;border:1px solid var(--line);border-radius:4px;background:var(--white);color:var(--text);line-height:1.45}
+.spacing-presets strong,.spacing-presets small{display:block}
+.spacing-presets strong{font-size:13px;font-weight:600}
+.spacing-presets small{margin-top:2px;font-size:11px}
+.spacing-presets button:hover{border-color:var(--green)}
+.spacing-presets button[aria-pressed=true]{border-color:var(--green);background:var(--green);color:white}
+.spacing-presets button[aria-pressed=true]::after{content:"";position:absolute;right:10px;top:13px;width:5px;height:9px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .spacing-panel .muted{font-size:11px;line-height:1.8}
 .spacing-mode-help{padding:10px 12px;border-left:2px solid #a6b49a;background:#e9ede2}
 .spacing-details{margin-top:15px;border-top:1px solid var(--line);padding-top:12px}

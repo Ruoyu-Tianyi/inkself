@@ -38,7 +38,7 @@ Generation and layout operate word by word, rather than producing continuous par
 
 ## Spacing and writing rhythm (current source)
 
-On the writing screen, choose a spacing style and expand the individual controls. You can make text more compact or increase space between lines and paragraphs, while separately adjusting how words move above and below the baseline and how much gaps vary. Editing a control selects Custom; restoring Natural resets the defaults. Changes apply the next time you generate, in both standard-document and assignment layouts.
+On the writing screen, choose a preset by clicking Natural (自然), Neat (工整), Compact (紧凑), or Relaxed (宽松) under “间距与书写节奏” (Spacing and writing rhythm). To adjust one setting, expand the individual controls and move its slider. The style changes to Custom. Click “生成试写” (Generate) to see the result in either a standard document or an assignment. Click Natural to restore the default spacing.
 
 | Control | Effect |
 | --- | --- |
