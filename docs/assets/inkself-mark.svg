@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Inkself</title>
+  <rect x="2" y="2" width="92" height="92" rx="21" fill="#263d57"/>
+  <path d="M52 40 49 51 46 65Q44 73 51 73Q55 73 60 69" fill="none" stroke="#f5f3ec" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="54" cy="26" r="4" fill="#f5f3ec"/>
+</svg>

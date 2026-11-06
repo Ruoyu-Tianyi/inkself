@@ -1,79 +1,130 @@
-# Inkself
+<p align="center">
+  <img src="docs/assets/inkself-mark.svg" width="72" height="72" alt="Inkself logo">
+</p>
 
-[简体中文](README.md) | **English**
+<h1 align="center">Inkself</h1>
 
-Inkself is a **personal handwriting desktop application for Windows and macOS**. It generates new content from natural English and digit handwriting samples, imports Markdown, typesets mathematical notation, and exports handwritten PDFs. The app runs locally with a bundled CPU AI inference runtime. **This is a desktop preview: human validation is ongoing, and it has not met the quality threshold for a stable release.**
+<p align="center"><strong>New words. Familiar handwriting.</strong></p>
+<p align="center">A personal handwriting app for Windows and macOS. Give new content your own writing style.<br>Local AI · Markdown import · Adjustable spacing · Handwritten PDFs</p>
 
-## Download the desktop preview
+<p align="center">
+  <a href="https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1"><img src="https://img.shields.io/badge/preview-v0.5.0--rc.1-263d57" alt="Desktop preview v0.5.0-rc.1"></a>
+  <a href="https://github.com/Ruoyu-Tianyi/inkself/actions/workflows/tests.yml"><img src="https://github.com/Ruoyu-Tianyi/inkself/actions/workflows/tests.yml/badge.svg?branch=main" alt="Automated tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm_Noncommercial-69745b" alt="PolyForm Noncommercial license"></a>
+</p>
 
-Download the [0.5.0-rc.1 desktop preview](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1), or browse all versions on [GitHub Releases](https://github.com/Ruoyu-Tianyi/inkself/releases). See the [0.5.0 release notes](docs/release-0.5.0.md) for the changes.
+<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong></p>
+<p align="center"><a href="#download">Download</a> · <a href="#start">Try it</a> · <a href="#features">Features</a> · <a href="#docs">Documentation</a> · <a href="https://github.com/Ruoyu-Tianyi/inkself/issues">Report an issue</a></p>
 
-- **Windows x64:** run `Inkself-Windows-x64-Setup.exe`, then open Inkself.
-- **Mac Apple Silicon:** download `Inkself-macOS-arm64.dmg`.
-- **Mac Intel:** download `Inkself-macOS-x86_64.dmg`.
+> **Desktop preview · 0.5.0-rc.1**<br>
+> Installation, sample capture, generation, and PDF export are available. Handwriting similarity and content accuracy still need human review. Automatic high-fidelity cloning from any short sample remains a research goal.
 
-On Mac, drag the app to Applications before opening it. Installers include the local CPU AI runtime; no separate Python installation or API key is required. Model files are downloaded separately during initial setup. Personal data is stored in your user directory, outside the application bundle.
+![Inkself sample capture screen with writing prompts and photo upload](docs/assets/inkself-studio.jpg)
 
-The Windows installer is unsigned. Mac apps are ad-hoc signed, without an Apple Developer ID signature or notarization. Your operating system may block the first launch. Verify the official release and SHA-256 checksums, and read the [Mac installation guide](docs/macos-guide.md) or the [Windows desktop guide](docs/desktop-guide.md) in Chinese. Do not disable system-wide security protections.
+<p align="center"><sub>Actual app interface with an empty data directory. Only printed sample prompts are shown; no personal handwriting or private documents are included.</sub></p>
 
-## Current capabilities
+<a id="download"></a>
 
-- English and digit samples, with optional mathematical symbols and Greek letters; PNG/JPEG/WebP upload, line segmentation, and line-type review.
-- Multiple handwriting profiles, cached personal styles, and preferences for size, line spacing, and ink color.
-- Natural, Neat, Compact, and Relaxed spacing buttons plus custom adjustments for letters, words, lines, paragraphs, digits, symbols, word baseline movement, and spacing variation. Settings are saved with profiles and generated documents. The `0.5.0-rc.1` installers include these controls.
-- Text and settings are automatically saved as a local draft across restarts. Completing a generation preserves edits made while waiting. Opening history asks before replacing an unsent draft. Temporary connection failures support automatic reconnection and a manual status retry.
-- Real offline CPU inference using a pinned VATr++ pretrained generator, including words, sentences, and digits absent from the sample.
-- Source-image comparison, A4 previews, PDF export, document history, and human feedback.
-- Line-based pagination for long documents, keeping question numbers, formulas, and explanations together where possible and reducing paragraph widows and orphans. The habit and reference modes accept up to 20,000 characters.
-- Word gaps measured between visible strokes, with stored sample gap distributions and reproducible natural variation. Conservative estimates are identified when sample evidence is insufficient.
-- Inline and display mathematics, superscripts and subscripts, fractions, roots, nested brackets, sums, integrals, and Greek letters. Brackets and roots use sample-informed stroke width and slant with slight variation. Missing mathematical glyphs require explicit permission to use supplemental handwriting glyphs.
-- Markdown import: local parsing of headings, paragraphs, lists, emphasis, and formulas, with an editable preview, preserved source text, and conversion notices. If text or settings change while a file is being read, the import result does not overwrite those edits.
-- Assignment output: numbered questions, choice columns, tables, text decision trees, common subscript notation, question-aware pagination, and repeated table headers. Optional first-page identification requires a reviewed personal glyph profile.
-- A per-user Windows installer, Mac apps for both architectures, and a separate local CPU AI runtime. Initial setup downloads and verifies a pinned model; users do not need to configure Python or an API key, and personal data is stored separately.
-- Reusable batch comparisons with fixed test texts, input snapshots, model/code fingerprints, HTML comparison pages, and file-by-file reproduction checks.
-- Experimental habit adaptation: shared letter dimensions, some body-text allographs, pen lifts, and connection statistics fitted from manually reviewed word images. Some rules apply to unseen words.
-- Symbol variation in habit mode: oversized percent signs and heavy slashes are corrected, with reproducible small shape variations and safeguards for decimal points, colons, and percent-sign loops at small sizes.
-- An experimental source-glyph bank. After manual annotation and character review, choose reference-glyph fidelity or model width/slant calibration, with bounded shape and spacing variation for source digits. A developer currently prepares this bank; it is not built automatically from an uploaded image.
+## Download the app
 
-Generation and layout operate word by word, rather than producing continuous paragraph-level strokes. Habit adaptation still uses raster stroke skeletons from the source; it is not an end-to-end stroke trajectory generator, and arbitrary unannotated short samples cannot yet be cloned automatically. The default model does not substitute a generic font or require collecting every character individually. A separate, manually reviewed reference mode reuses observed words, fragments, and letters; it cannot infer unseen characters or joins.
+| Your device | Installer | Installation |
+| --- | --- | --- |
+| Windows 10 / 11 · x64 | [Download Windows installer](https://github.com/Ruoyu-Tianyi/inkself/releases/download/v0.5.0-rc.1/Inkself-Windows-x64-Setup.exe) | Run the installer, then open Inkself |
+| Mac · Apple Silicon | [Download macOS arm64](https://github.com/Ruoyu-Tianyi/inkself/releases/download/v0.5.0-rc.1/Inkself-macOS-arm64.dmg) | Open the DMG and drag the app to Applications |
+| Mac · Intel | [Download macOS x86_64](https://github.com/Ruoyu-Tianyi/inkself/releases/download/v0.5.0-rc.1/Inkself-macOS-x86_64.dmg) | Open the DMG and drag the app to Applications |
 
-## Spacing and writing rhythm
+Installers include the CPU AI runtime. **No Python setup, API key, or dedicated GPU is required.** Initial setup downloads approximately **580 MB** of model files separately. Once verified, they can be used to generate handwriting offline.
 
-On the writing screen, choose a preset by clicking Natural (自然), Neat (工整), Compact (紧凑), or Relaxed (宽松) under “间距与书写节奏” (Spacing and writing rhythm). To adjust one setting, expand the individual controls and move its slider. The style changes to Custom. Click “生成试写” (Generate) to see the result in either a standard document or an assignment. Click Natural to restore the default spacing.
+The Windows package is unsigned; Mac packages are ad-hoc signed and not yet notarized. Your operating system may block them. For installation and troubleshooting, see the [Windows guide](docs/desktop-guide.md) / [Mac guide](docs/macos-guide.md). [Release and checksums](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1) · [What's new](docs/release-0.5.0.md) · [All releases](https://github.com/Ruoyu-Tianyi/inkself/releases)
 
-| Control | Effect |
+<a id="start"></a>
+
+## Start with your first sample
+
+1. **Prepare local AI.** Open the app, click **准备本地 AI** (Prepare local AI), and wait for the initial download and verification to finish.
+2. **Write a sample and take a photo.** Copy the app's English and digit prompts in your usual handwriting. Upload a PNG, JPEG, or WebP image, then review and confirm the text lines.
+3. **Try new content.** Enter text or import an `.md` document, choose a spacing style, and click **生成试写** (Generate sample). Start with a short paragraph and compare it with your original handwriting.
+4. **Review and export.** Check letters, digits, and symbols before exporting a PDF. Your handwriting profiles and local draft remain available the next time you open the app.
+
+**Choose a path based on the samples you have:**
+
+| | Generate directly from an uploaded photo | Use a prepared personal glyph profile |
+| --- | --- | --- |
+| What you need | A photo of English and digits, with segmented text lines confirmed | A manually annotated, character-by-character reviewed glyph bank; habit adaptation also requires fitting |
+| What you can do | Generate new words, sentences, digits, and some punctuation with a few-shot model | Get finer glyph control, longer documents, assignment layouts, and structured formulas |
+| Input limit per generation | 3,000 characters | Habit adaptation / glyph fidelity: 20,000 characters |
+| Current setup effort | Can be completed in the app by ordinary users | Glyph banks still need developer preparation; uploading an image does not create one automatically |
+
+The optional math sample area stores your personal symbol samples. **Copying and uploading mathematical symbols does not mean the app has automatically learned how you write them.** See the [AI workflow](docs/ai-workflow.md) for details.
+
+<a id="features"></a>
+
+## From short sentences to full documents
+
+| Feature | What you can do |
 | --- | --- |
-| Letter spacing | Gaps between letters within a word; habit and reference modes only |
-| Word spacing | Gaps between the visible strokes of adjacent words |
-| Line spacing | A multiplier on the base line spacing, with room retained for ink and formulas |
-| Paragraph spacing | Space between existing paragraphs |
-| Digit spacing | Gaps within digit sequences; habit and reference modes only |
-| Symbol spacing | Horizontal spacing around symbols; habit and reference modes only |
-| Word baseline movement | Vertical movement of words within a line |
-| Spacing variation | Strength of gap variation, independent of glyph-shape variation |
+| **Personal handwriting profiles** | Save multiple samples, style caches, and preferences for future content. Generation, previews, and document history are processed locally. |
+| **One-click spacing styles** | Choose Natural, Neat, Compact, or Relaxed, then fine-tune letter, word, line, paragraph, digit, and symbol spacing, as well as baseline movement and variation. |
+| **Markdown → handwriting** | Extract visible text from headings, paragraphs, lists, and emphasis, then review conversion notices before generating. Formulas require a prepared glyph profile; the source text is saved with the result. |
+| **Long documents and assignments** | Automatically wrap and paginate text, handling question numbers, multiple-choice columns, tables, and text decision trees. Keep each question together where possible and reduce isolated lines. Requires a prepared glyph profile. |
+| **Mathematical content** | Write subscripts, superscripts, fractions, roots, nested brackets, Greek letters, sums, and integrals. Requires a prepared glyph profile; you can explicitly enable companion glyphs for missing supported math symbols. |
+| **Keep editing, export anytime** | Local drafts save automatically, and edits made during generation are preserved. Includes A4 previews, PDF export, document history, and comparison with the original image. |
 
-Natural preserves the default settings. Neat reduces gap variation and baseline movement with slightly wider lines; Compact reduces spacing and vertical whitespace; Relaxed increases spacing and allows slightly stronger variation. A spacing value of `100%` means the default level. Set baseline movement or spacing variation to `0%` to turn off that added variation. Existing irregularities within the original handwriting image remain. For letter, symbol, line, and paragraph gaps that were previously fixed, extra variation starts above `100%`; lower values adjust existing word and digit gap variation.
+Word, line, and paragraph spacing and word baseline movement work in every mode. **Spacing within words, numbers, and symbol sequences** requires habit adaptation or glyph fidelity mode; unavailable controls are disabled. These preferences are reproducible layout settings, not evidence that the app has learned those habits from your samples. See the [spacing guide](docs/spacing-controls.md).
 
-**Fine adjustments inside words, numbers, and symbols require habit or reference mode.** The default neural model and model-calibrated mode generate complete word images; their internal-spacing controls are disabled. The other layout controls remain available. Changing internal spacing reconstructs affected captured words from reviewed glyphs, so their original joins may change. Pixel rounding, mathematical structure, and minimum clearance can limit the visible effect of a small adjustment.
+<a id="faq"></a>
 
-Settings are saved with each generated document and become the selected profile's preferences for its next use. These are reproducible layout preferences, not evidence that the app has learned additional habits from the sample. The same input, profile, model, code, settings, and random seed reproduce the result. Width and height changes can alter wrapping, page count, and page breaks; check the generated preview before exporting. The [spacing guide](docs/spacing-controls.md) provides step-by-step instructions in Chinese.
+## Before you begin
 
-## Quick start
+<details>
+<summary><strong>Can a short sample produce handwriting exactly like mine?</strong></summary>
 
-After installing the full desktop app for your system:
+Not reliably yet. The current few-shot model can generate words absent from your samples, but similarity across writers, natural joins, and text accuracy are still being evaluated. Habit adaptation and glyph fidelity can improve results using reviewed glyphs from your handwriting, but still require manual preparation. They do not generate continuous strokes across an entire paragraph or automatically learn every character from any unannotated short sample.
 
-1. Open Inkself and select “准备本地 AI” (prepare local AI). Initial setup downloads approximately 580 MB from a pinned model revision. After verification, generation can run offline.
-2. Naturally copy the supplied English and digit prompt. Add the optional mathematics section if needed. Upload a photo and classify each line as English/digits, mathematics/Greek, or unused.
-3. Enter new content or import Markdown, generate a trial, and compare it with the source character by character.
-4. Export the PDF and record content accuracy, handwriting similarity, and naturalness.
+</details>
 
-The Windows build targets compatible Windows 10/11 x64 systems; separate Mac builds support Apple Silicon and Intel. Native-window and PDF-export validation records for the packages are listed on the [release page](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1). First-time installation, model setup, and personal handwriting quality still need human validation. Bundling resolves environment setup requirements; it does not establish high-fidelity cloning from arbitrary short samples. Initial downloading needs internet access but does not send your samples or documents. Markdown containing structured formulas still requires a reviewed personal glyph profile. See the [Mac installation guide](docs/macos-guide.md), or the Chinese [Windows desktop guide](docs/desktop-guide.md), [Markdown import guide](docs/markdown-import.md), and [AI workflow](docs/ai-workflow.md).
+<details>
+<summary><strong>Does it support Chinese and complex formulas?</strong></summary>
 
-After editing, wait for “草稿已保存在本机” (draft saved locally). If saving fails, keep the window open and retry. The draft is stored in `compose-draft.json` inside the application's data directory, including its text and layout settings; include it when backing up that directory. Assignment-mode `$$...$$` formulas keep their own centered lines, and supplemental symbols attached to numbers can be combined correctly. Write currency dollar signs as `\$`; the profile must still contain a `$` glyph. Use `USD 12.50` when that glyph is unavailable.
+English and digits are the main focus; Chinese handwriting generation is not supported yet. The default neural model supports only some punctuation in its alphabet, not equals signs, dollar signs, or structured formulas. Structured formulas require habit adaptation or glyph fidelity mode, `$...$` / `$$...$$` input, and the corresponding glyphs. Only a subset of LaTeX syntax is supported, not full LaTeX documents or environments such as matrices. Companion math glyphs must be explicitly enabled; their shapes are not learned from your samples. See the [math and documents guide](docs/math-and-documents.md).
 
-### Run from source (developers)
+</details>
 
-The following steps are for Windows development with Python **3.10–3.12**. Most users should use an installer above. `setup-web.ps1` retains its historical development-setup filename:
+<details>
+<summary><strong>Do I need an external AI service? Are my samples uploaded?</strong></summary>
+
+No API key or cloud AI service is required. Installers include a local CPU inference runtime. You initiate the download of a pinned model version during setup, then use it offline. Samples, transcriptions, style caches, and documents are stored locally by default and are not uploaded with the model download. Use only your own samples or samples you have permission to use. The app does not provide signature or identity verification. See the [third-party model notice](docs/model-notice.md) for model sources and licensing.
+
+</details>
+
+<details>
+<summary><strong>Can I use the output immediately? Are PDFs searchable?</strong></summary>
+
+Review the result first. Independent OCR and automatic correction are not integrated, so successful generation does not guarantee that every letter, digit, or symbol is correct. PDFs contain handwriting images without a searchable text layer.
+
+</details>
+
+<a id="docs"></a>
+
+## Find the right guide
+
+| What you want to do | Start here |
+| --- | --- |
+| Install, set up, or troubleshoot | [Windows desktop guide](docs/desktop-guide.md) · [Mac installation guide](docs/macos-guide.md) |
+| Adjust spacing and writing rhythm | [Spacing guide](docs/spacing-controls.md) |
+| Import documents and lay out formulas or assignments | [Markdown import](docs/markdown-import.md) · [Math and documents](docs/math-and-documents.md) |
+| Understand sampling, AI, and manual preparation | [AI workflow](docs/ai-workflow.md) · [Habit adaptation experiments](docs/habit-adapter.md) |
+| Run reproducible comparisons | [Experiment workflow](docs/experiment-workflow.md) · [Public evaluation texts](examples/evaluation-suite.json) |
+| Check releases and future plans | [0.5.0 release notes](docs/release-0.5.0.md) · [Product roadmap](docs/roadmap.md) |
+
+## Development and contributions
+
+Report bugs or suggest improvements through [Issues](https://github.com/Ruoyu-Tianyi/inkself/issues). Include your operating system, app version, steps to reproduce, and expected result. Remove personal handwriting, private documents, and identifying information before sharing screenshots or logs publicly. Read the [contribution policy](CONTRIBUTING.md) before submitting code.
+
+<details>
+<summary><strong>Run from source and check the code (developers)</strong></summary>
+
+The following steps are for Windows development and require Python **3.10–3.12**. Ordinary users can use the installers above.
 
 ```powershell
 git clone https://github.com/Ruoyu-Tianyi/inkself.git
@@ -83,57 +134,24 @@ cd inkself
 ./.local/model-env/Scripts/python.exe desktop.py
 ```
 
-Starting the desktop app from source also opens an application window. The legacy **Start Inkself.cmd** remains available for local interface debugging at `http://127.0.0.1:8765`. Downloading models and dependencies requires internet access and additional disk space. Follow your machine's PowerShell execution policy without disabling system-wide protections.
+Run checks in the project's Python environment. UI checks also require Node.js:
 
-See the [development environment guide](docs/web-guide.md) for setup, stopping the debugging service, and troubleshooting.
-
-A basic portable package can still be built with `python scripts/build_desktop.py`. Its menu supports importing old profiles and connecting an existing model environment; the basic package itself does not include the AI runtime.
-
-## Validation status and limitations
-
-| Area | Status |
-| --- | --- |
-| Local automated tests | 278 Python checks: 277 passed and one real-symlink test skipped because of Windows permissions; 17 UI state tests also passed. Coverage includes spacing presets, draft persistence and recovery, edit protection, retrying failed jobs, and assignment math layout. Long-document and answer-sheet reproducibility checks with fixed settings passed. |
-| Real model inference | Both the source environment and the separate InkselfAI.exe have generated outputs, checking cache reuse, complete results, and job logs. This does not establish handwriting similarity. |
-| Application flow | Sample import, confirmation, generation, preview, and PDF export have been exercised. See the [release notes](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1) for this version's native checks on each platform. |
-| Personal similarity and generalization to other writers | **Validation is ongoing; no passing conclusion yet.** |
-| Comprehensive content accuracy | **Not fully validated. Habit mode includes digit/symbol regression checks, but the default model can still write incorrect content.** |
-| Independent OCR and automatic correction | Not integrated. Outputs require human review by default. |
-| Remote multi-user service | Not deployed. The local service should not be exposed directly to the public internet. |
-
-Current support covers uppercase and lowercase English, digits, and some punctuation in the model alphabet. The default neural model does not support Chinese, equals signs, dollar signs, or structured formulas. Mathematical input requires habit or reference mode and `$...$` / `$$...$$` delimiters. Supplemental paths can be explicitly enabled for unsampled mathematical glyphs; their specific shapes have not been learned from your sample. Successful generation, content logs, or downloads do not prove that the content is correct or that the handwriting resembles its owner.
-
-## Development and structure
-
-```sh
-# Run inside the project's Python environment
-python -m unittest discover -s tests -v
+```powershell
+./.local/model-env/Scripts/python.exe -m unittest discover -s tests -v
 node --check web/static/app.js
 node --test tests/test_spacing_ui.cjs tests/test_workflow_ui.cjs
-python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 ```
 
-- `web/`: application interface, local API, sample processing, and the VATr++ inference adapter.
-- `scripts/setup_model.py`: pinned model-asset downloading and large-file hash verification.
-- `web/model_setup.py`, `web/model-assets.json`: first-use downloads, resuming interrupted downloads, and per-file verification.
-- `ai_worker.py`, `packaging/`, `scripts/build_*.py`: the separate AI runtime, portable apps, and per-user installer. Public installers do not embed model weights.
-- `engines/glyphs/`: individual-character capture and deterministic glyph-reuse tools for assistance and comparison, separate from the app's few-shot generation model.
-- `tests/`: synthetic-sample and API tests, not evidence of validated human handwriting similarity.
+`web/` contains the app interface, local API, and inference adapter. `ai_worker.py`, `packaging/`, and build scripts handle desktop distribution. `engines/glyphs/` provides auxiliary glyph tools and comparison utilities. Model weights, private samples, and local reports are not committed to the repository.
 
-See [habit-adaptation experiments](docs/habit-adapter.md) for the developer fitting workflow and validation boundaries, and the [reproducible comparison workflow](docs/experiment-workflow.md) for batch generation and rerunning input snapshots. The repository includes [three test-text sets](examples/evaluation-suite.json), with no personal handwriting.
+See the [development environment guide](docs/web-guide.md) for setup and local UI debugging, and the [architecture](docs/architecture.md) for implementation details.
 
-The [mathematics and document guide](docs/math-and-documents.md) covers long text, formula input, supplemental-glyph sources, AI dependencies, and limitations.
+</details>
 
-Also see the [architecture](docs/architecture.md), [product roadmap](docs/roadmap.md), and [auxiliary glyph workflow](engines/glyphs/workflow.md). Supporting guides are currently primarily in Chinese.
+**Validation progress:** For `0.5.0-rc.1`, 277 of 278 local Python checks passed; 1 was skipped because of Windows symlink permissions. All 17 UI state tests passed. Windows and Mac build, native window, and PDF export records are on the [release page](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1); continuous integration is on [Actions](https://github.com/Ruoyu-Tianyi/inkself/actions/workflows/tests.yml). These checks validate software behavior. **Personal likeness and generalization across writers still require human evaluation.**
 
-## Models, data, and privacy
+## License and acknowledgments
 
-The app uses a pinned [VATr++](https://huggingface.co/blowing-up-groundhogs/vatrpp) generator. Sources, licenses, and adaptation details are documented in the [third-party model notice](docs/model-notice.md). Public installers bundle inference dependencies, but not weights, upstream model code, or character prototypes. Initial setup downloads those assets from the model source to the user's computer. They are not committed to this source repository.
+Inkself's own code is licensed under [PolyForm Noncommercial 1.0.0](LICENSE). It is a **source-available project with use restrictions**. Noncommercial use and institutional uses expressly listed in the license are permitted under its terms. Commercial use outside that scope requires separate written authorization; the author retains commercial licensing rights. See the [commercial licensing notice](COMMERCIAL-LICENSE.md). Third-party components, fonts, and models retain their own licenses.
 
-Samples, transcriptions, style caches, documents, and reports containing full inputs are stored locally by default and excluded from Git tracking. Use only your own samples or samples you are authorized to use. The app does not provide signatures or identity verification.
-
-Early experiments were inspired by [TypeScribe](https://github.com/rudyoactiv/typescribe-handwriting). The current app uses VATr++ for style-conditioned generation from static images, rather than TypeScribe's stroke-trajectory priming interface.
-
-## License and commercial licensing
-
-The project's own code uses [PolyForm Noncommercial 1.0.0](LICENSE). This is a source-available project with use restrictions. Noncommercial uses and institutional uses expressly permitted by the license are subject to its terms; commercial use outside that scope requires separate written authorization. The author retains commercial licensing rights. See the [commercial licensing notice](COMMERCIAL-LICENSE.md) and [contribution policy](CONTRIBUTING.md). Third-party components, fonts, and models retain their own licenses.
+Image-based style generation uses [VATr++](https://huggingface.co/blowing-up-groundhogs/vatrpp); see the [model notice](docs/model-notice.md) for its source, pinned version, and adaptation details. Thanks to [TypeScribe](https://github.com/rudyoactiv/typescribe-handwriting) for inspiring the early experiments. The current app does not use TypeScribe's handwriting trajectory priming interface.
