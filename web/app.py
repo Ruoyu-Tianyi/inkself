@@ -2,7 +2,7 @@
 from __future__ import annotations
 import concurrent.futures
 from contextlib import asynccontextmanager
-import hashlib,io,json,os,re,secrets,shutil,subprocess,sys,threading,uuid
+import hashlib,io,json,logging,os,re,secrets,shutil,subprocess,sys,threading,uuid
 from datetime import datetime,timezone
 from pathlib import Path
 from typing import Literal
@@ -19,6 +19,7 @@ from .samples import process_sample
 from .capture_prompt import PROMPT_ID,LEGACY_PROMPT_ID,PROMPT_LINES,prompt_payload,write_sampling_guide
 from .runtime_paths import data_root,model_root,model_python,model_worker,model_probe_path,resource_root,worker_command
 from .runtime.spacing import normalize_spacing
+from .version import VERSION
 
 ROOT=resource_root()
 DATA=data_root()
@@ -29,6 +30,7 @@ ALPHABET=set(' !"#%&\'()*+,-./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk
 POOL=concurrent.futures.ThreadPoolExecutor(max_workers=1)
 LOCK=threading.RLock()
 TOKEN=secrets.token_urlsafe(32)
+LOGGER=logging.getLogger(__name__)
 
 
 def now(): return datetime.now(timezone.utc).isoformat()
@@ -40,6 +42,17 @@ def write(path,data):
     finally:
         temporary.unlink(missing_ok=True)
 def read(path): return json.loads(Path(path).read_text(encoding='utf-8'))
+def fail_job(folder,job,message):
+    """A failed submission or worker must never keep occupying a queue slot."""
+    job.update(status='failed',message=message,completed_at=now())
+    try:
+        write(folder/'job.json',job)
+    except OSError:
+        # If the disk cannot persist even the failure, withdraw the incomplete
+        # record. Its input files remain available for local diagnostics.
+        LOGGER.exception('Could not save failed job %s',job['id'])
+        try:(folder/'job.json').unlink(missing_ok=True)
+        except OSError:LOGGER.exception('Could not withdraw incomplete job %s',job['id'])
 def identifier(value):
     if not re.fullmatch('[a-f0-9]{32}',value): raise HTTPException(404,'记录不存在。')
     return value
@@ -97,7 +110,7 @@ async def local_session(request:Request,call_next):
     return response
 
 @app.get('/api/session')
-def session(): return {'token':TOKEN,'mode':'local-single-owner','version':'0.4.0-desktop-preview','instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
+def session(): return {'token':TOKEN,'mode':'local-single-owner','version':VERSION,'instance_id':os.environ.get('INKSELF_INSTANCE_ID')}
 @app.get('/api/health')
 def health(): return {'status':'ok','model':model_status(),'privacy':'样本、风格和文档保存在当前电脑。此版本仅支持本机单用户，不应直接暴露到公网。'}
 @app.get('/api/prompt')
@@ -208,9 +221,7 @@ def delete_profile(pid:str):
         for job in owned: shutil.rmtree(job_path(job['id']))
         shutil.rmtree(folder)
     return {'deleted':True}
-class Generation(BaseModel):
-    profile_id:str
-    text:str=Field(min_length=1,max_length=20000)
+class GenerationPreferences(BaseModel):
     size:int=Field(default=16,ge=10,le=26)
     line_spacing:float=Field(default=1.6,ge=1.2,le=2.2)
     ink:str=Field(default='#263d57',pattern=r'^#[0-9a-fA-F]{6}$')
@@ -218,7 +229,6 @@ class Generation(BaseModel):
     render_mode:Literal['model','model-calibrated','reference','learned-habits']='model'
     math_enabled:bool=False
     allow_supplemental_math:bool=False
-    document_id:str|None=None
     layout_mode:Literal['standard','assignment']='standard'
     answer_header:str=Field(default='',max_length=200)
     spacing:dict=Field(default_factory=normalize_spacing)
@@ -227,6 +237,38 @@ class Generation(BaseModel):
     @classmethod
     def validate_spacing(cls,value):
         return normalize_spacing(value)
+
+class Generation(GenerationPreferences):
+    profile_id:str
+    text:str=Field(min_length=1,max_length=20000)
+    document_id:str|None=None
+
+class ComposeDraft(BaseModel):
+    version:Literal[1]=1
+    edited_at:int=Field(default=0,ge=0,le=9007199254740991)
+    profile_id:str=Field(default='',pattern=r'^(?:[a-f0-9]{32})?$')
+    text:str=Field(default='',max_length=20000)
+    document_id:str|None=Field(default=None,pattern=r'^[a-f0-9]{32}$')
+    dirty:bool=False
+    preferences:GenerationPreferences=Field(default_factory=GenerationPreferences)
+
+@app.get('/api/compose-draft')
+def compose_draft():
+    path=DATA/'compose-draft.json'
+    with LOCK:
+        if not path.exists():return None
+        try:return ComposeDraft.model_validate(read(path)).model_dump()
+        except (OSError,ValueError) as error:
+            raise HTTPException(503,'未能读取上次草稿，原文件仍保留在应用数据目录中。') from error
+
+@app.put('/api/compose-draft')
+def save_compose_draft(body:ComposeDraft):
+    value=body.model_dump()
+    with LOCK:
+        try:write(DATA/'compose-draft.json',value)
+        except OSError as error:
+            raise HTTPException(503,'草稿未能保存，请检查磁盘剩余空间和应用数据目录是否可写。') from error
+    return value
 
 @app.post('/api/jobs',status_code=202)
 def generate(body:Generation):
@@ -299,30 +341,53 @@ def generate(body:Generation):
         from .runtime.vatr_worker import request_input_hashes
         try:request['expected_input_hashes']=request_input_hashes(request)
         except (OSError,ValueError) as error:raise HTTPException(409,'生成输入已变化，请重新提交。') from error
-        write(dest/'job.json',job)
-        if imported_document:
-            job['document_source']={'id':body.document_id,'filename':imported_document['filename'],
-                'source_sha256':imported_document['source_sha256'],'parser_version':imported_document.get('parser_version'),
-                'edited_after_import':text!=imported_document['text'],'warnings':imported_document['warnings']}
-            (dest/'source.md').write_bytes(imported_document['source_text'].encode('utf-8'))
-            write(dest/'document.json',imported_document)
+        previous_profile=dict(profile)
+        preferences_saved=False
+        try:
+            write(dest/'request.json',request)
+            if imported_document:
+                job['document_source']={'id':body.document_id,'filename':imported_document['filename'],
+                    'source_sha256':imported_document['source_sha256'],'parser_version':imported_document.get('parser_version'),
+                    'edited_after_import':text!=imported_document['text'],'warnings':imported_document['warnings']}
+                (dest/'source.md').write_bytes(imported_document['source_text'].encode('utf-8'))
+                write(dest/'document.json',imported_document)
             write(dest/'job.json',job)
-        write(dest/'request.json',request)
-        profile['preferences']=body.model_dump(exclude={'profile_id','text','document_id'})
-        profile['word_spacing']=spacing_model
-        write(folder/'profile.json',profile)
-        POOL.submit(run_job,jid)
+            profile['preferences']=body.model_dump(exclude={'profile_id','text','document_id'})
+            profile['word_spacing']=spacing_model
+            write(folder/'profile.json',profile)
+            preferences_saved=True
+            POOL.submit(run_job,jid)
+        except (OSError,RuntimeError) as error:
+            message=('无法保存生成任务，请检查磁盘剩余空间和应用数据目录是否可写，然后重试。'
+                     if isinstance(error,OSError) else '生成任务未能启动，请重新提交；若仍失败，请重启应用。')
+            fail_job(dest,job,message)
+            if preferences_saved:
+                try:write(folder/'profile.json',previous_profile)
+                except OSError:LOGGER.exception('Could not restore preferences after failed submission')
+            raise HTTPException(503,message) from error
     return job
 
 def run_job(jid):
-    folder=job_path(jid);job=read(folder/'job.json')
-    try:
+    # Submission holds LOCK until every input and preference has been saved.
+    # Also ignore work left in the executor after a rejected submission.
+    with LOCK:
+        try:folder=job_path(jid);job=read(folder/'job.json')
+        except (HTTPException,OSError,ValueError):return
+        if job.get('status')!='queued':return
         local_layout=job['preferences'].get('render_mode') in ('reference','learned-habits')
-        job.update(status='running',message='正在生成字迹、公式并规划分页。' if local_layout else '正在运行本地少样本模型，CPU 生成可能需要几分钟。');write(folder/'job.json',job)
+        job.update(status='running',message='正在生成字迹、公式并规划分页。' if local_layout else '正在运行本地少样本模型，CPU 生成可能需要几分钟。')
+        try:write(folder/'job.json',job)
+        except OSError:
+            fail_job(folder,job,'无法保存任务进度，请检查磁盘剩余空间和应用数据目录是否可写，然后重试。')
+            return
+    try:
         with (folder/'worker.log').open('w',encoding='utf-8') as log:
             env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',MPLBACKEND='Agg',PYTHONPATH='')
-            result=subprocess.run(worker_command(folder/'request.json',job['preferences'].get('render_mode','model'),python=MODEL_PYTHON),
-                                  cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1800,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            try:
+                result=subprocess.run(worker_command(folder/'request.json',job['preferences'].get('render_mode','model'),python=MODEL_PYTHON),
+                                      cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1800,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            except OSError as error:
+                raise RuntimeError('本地生成环境无法启动，请检查应用安装后重试。') from error
         if result.returncode:raise RuntimeError('模型运行失败；诊断日志已保留，请检查模型环境。')
         output=read(folder/'generated.json')
         pages=compose_pdf(folder,job,output)
@@ -332,11 +397,13 @@ def run_job(jid):
                    pdf_sha256=hashlib.sha256((folder/'result.pdf').read_bytes()).hexdigest())
         if output['model'].get('supplemental_math_glyphs'):
             job['message']='生成完成；公式中的配套手写字形尚未学习你的个人写法，请核对：'+''.join(output['model']['supplemental_math_glyphs'])
+        write(folder/'job.json',job)
     except subprocess.TimeoutExpired:
-        job.update(status='failed',message='生成超过 30 分钟，请缩短内容后重试。')
+        fail_job(folder,job,'生成超过 30 分钟，请缩短内容后重试。')
+    except OSError:
+        fail_job(folder,job,'生成文件未能保存，请检查磁盘剩余空间和应用数据目录是否可写，然后重试。')
     except Exception as error:
-        job.update(status='failed',message=str(error))
-    write(folder/'job.json',job)
+        fail_job(folder,job,str(error))
 
 def compose_pdf(folder,job,generated):
     from .document_layout import compose_document

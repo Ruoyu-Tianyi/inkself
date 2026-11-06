@@ -9,13 +9,17 @@
   #define SetupBaseName "Inkself-Setup"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #error AppVersion must be supplied by scripts/build_installer.py.
+#endif
+#ifndef AppBuildVersion
+  #error AppBuildVersion must be supplied by scripts/build_installer.py.
 #endif
 
 [Setup]
 AppId={{63B179DF-1D43-47EC-BCC4-FB3EE01AFCA1}
 AppName=Inkself
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppBuildVersion}
 AppPublisher=Inkself
 AppPublisherURL=https://github.com/Ruoyu-Tianyi/inkself
 DefaultDirName={localappdata}\Programs\Inkself

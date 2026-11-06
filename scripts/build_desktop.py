@@ -24,6 +24,8 @@ import uuid
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from web.version import VERSION
 RUNTIME_DISTRIBUTIONS = (
     'fastapi', 'uvicorn', 'python-multipart', 'httpx', 'Pillow', 'numpy',
     'opencv-python-headless', 'reportlab', 'pywebview',
@@ -278,14 +280,16 @@ def copy_licenses(bundle, distributions):
 
 def create_manifest(bundle, inventory):
     manifest = {
-        'schema_version': 1, 'application': 'Inkself',
+        'schema_version': 1, 'application': 'Inkself', 'version': VERSION,
         'platform': 'Windows', 'architecture': platform.machine(),
         'python': platform.python_version(),
         'dependencies': [{'name': item['name'], 'version': item['version']} for item in inventory],
         'source_sha256': {str(path.relative_to(ROOT)).replace('\\', '/'): sha256(path)
                           for path in sorted([ROOT / 'desktop.py', ROOT / 'desktop_runtime.py',
                                               ROOT / 'packaging/Inkself.spec', Path(__file__).resolve(),
-                                              ROOT / 'desktop-requirements.txt'])},
+                                              ROOT / 'desktop-requirements.txt',
+                                              *ROOT.glob('web/*.py'), *ROOT.glob('web/runtime/*.py'),
+                                              *[p for p in (ROOT / 'web/static').rglob('*') if p.is_file()]])},
     }
     write_json(bundle / 'build-manifest.json', manifest)
     create_checksums(bundle)
@@ -367,6 +371,7 @@ def copy_offline_guides(bundle):
         ('habit-adapter.md', 'habit-adapter.md'),
         ('markdown-import.md', 'markdown-import.md'),
         ('ai-workflow.md', 'ai-workflow.md'),
+        ('spacing-controls.md', 'spacing-controls.md'),
     ):
         source = ROOT / 'docs' / source_name
         text = source.read_text(encoding='utf-8')

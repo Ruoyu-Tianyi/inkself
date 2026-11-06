@@ -99,7 +99,10 @@ const InkselfSpacing = (() => {
     }
     presetButtons = document.querySelectorAll('[data-spacing-preset]');
     for (const button of presetButtons) {
-      button.addEventListener('click', () => restore({preset: button.dataset.spacingPreset}));
+      button.addEventListener('click', () => {
+        restore({preset: button.dataset.spacingPreset});
+        button.dispatchEvent(new Event('spacingchange', {bubbles: true}));
+      });
     }
     mounted = true;
     render();

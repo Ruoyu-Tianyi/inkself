@@ -31,7 +31,8 @@ def fixture(root, *, ai=False):
     (root / '_internal' / 'runtime.dll').write_bytes(b'synthetic runtime')
     (root / 'licenses' / 'python' / 'LICENSE.txt').write_text('Synthetic license')
     (root / 'THIRD_PARTY_NOTICES.txt').write_text('Synthetic dependency notices')
-    write(root / 'build-manifest.json', {'application': 'InkselfAI' if ai else 'Inkself', 'includes_model_assets': False})
+    write(root / 'build-manifest.json', {'application': 'InkselfAI' if ai else 'Inkself',
+          'version': installer.APP_VERSION, 'includes_model_assets': False})
     checksums(root)
     return root
 
@@ -108,6 +109,25 @@ class InstallerSafety(unittest.TestCase):
         self.assertTrue(all('uninsneveruninstall' in line for line in lines))
         self.assertTrue(all('onlyifdoesntexist' not in line for line in lines))
         self.assertTrue(any('README.md' in line for line in lines))
+
+    def test_old_or_unversioned_components_cannot_be_relabelled_as_new_release(self):
+        for bundle in (self.app, self.ai):
+            manifest_path = bundle / 'build-manifest.json'
+            original = json.loads(manifest_path.read_text(encoding='utf-8'))
+            for version in (None, '0.4.0', '0.5.0-rc.0'):
+                with self.subTest(component=bundle.name, version=version):
+                    changed = dict(original)
+                    if version is None:
+                        changed.pop('version')
+                    else:
+                        changed['version'] = version
+                    write(manifest_path, changed)
+                    checksums(bundle)
+                    with self.assertRaisesRegex(ValueError, 'version must match'):
+                        installer.installer_payload(self.app, self.ai)
+            write(manifest_path, original)
+            checksums(bundle)
+        self.assertTrue(installer.installer_payload(self.app, self.ai))
 
     def test_offline_installer_covers_all_49_runtime_assets_and_is_ready(self):
         from web import model_setup

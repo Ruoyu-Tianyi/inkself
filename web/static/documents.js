@@ -10,7 +10,10 @@ const headerLabel=element('label','答卷姓名、学号等（选填，仅首面
 const answerHeader=document.createElement('textarea');answerHeader.id='answer-header';answerHeader.rows=2;answerHeader.maxLength=200;answerHeader.placeholder='用英文填写姓名、ID、班级；可换行';
 const layoutHelp=element('p','作业模式直接保留 Markdown 题号、表格和 text 文本树；只调整格式，不修改答案。需选择已有字形库的个人档案。','muted');
 document.querySelector('.compose-controls .label-row').before(layoutLabel,layoutMode,headerLabel,answerHeader,layoutHelp);
+function updateLayoutControls(){const assignment=layoutMode.value==='assignment';headerLabel.hidden=!assignment;answerHeader.hidden=!assignment;layoutHelp.hidden=!assignment;}
+updateLayoutControls();
 layoutMode.addEventListener('change',()=>{
+  updateLayoutControls();
   if(layoutMode.value!=='assignment')return;
   const profile=state.profiles.find(p=>p.id===$('#profile-select').value);
   if(profile?.reference_bank){$('#render-mode').value=profile.habit_model?'learned-habits':'reference';$('#math-enabled').checked=true;updateMathControls();}
@@ -27,11 +30,15 @@ mdControls.append(mdLabel, mdHelp, mdInfo);
 document.querySelector('.compose-controls .label-row').before(mdControls);
 mdInput.addEventListener('change', async () => {
   const file = mdInput.files[0]; if (!file) return;
+  if (!/\.(md|markdown)$/i.test(file.name)) { notice('请选择 .md 或 .markdown 文档。', true); mdInput.value = ''; return; }
   if (file.size > 256 * 1024) { notice('文档不能超过 256 KB，请拆分后导入。', true); mdInput.value = ''; return; }
-  mdInput.disabled = true;
+  mdInput.disabled = true;state.importing=true;$('#generate-button').disabled=true;
+  const revision=state.editorRevision,importLayout=layoutMode.value;
+  mdInfo.textContent='正在读取文档…';mdInfo.hidden=false;
   try {
-    const form = new FormData(); form.append('file', file);form.append('layout_mode',layoutMode.value);
+    const form = new FormData(); form.append('file', file);form.append('layout_mode',importLayout);
     const imported = await api('/documents/markdown', {method:'POST', body:form});
+    if(revision!==state.editorRevision){mdInfo.hidden=true;notice('读取期间正文或设置已修改，已保留当前草稿。需要替换时，请重新选择文档。');return;}
     state.documentId = imported.id;
     $('#content').value = imported.text; countText();
     const profile = state.profiles.find(p => p.id === $('#profile-select').value);
@@ -42,11 +49,12 @@ mdInput.addEventListener('change', async () => {
     updateMathControls();
     const notes = [...imported.warnings];
     if (imported.math_enabled && !profile?.reference_bank) notes.push('文档包含公式，需选择已有核对字形库的档案。');
-    mdInfo.textContent = `${imported.filename} · ${imported.summary.characters} 字符。${layoutMode.value==='assignment'?'已保留作业 Markdown，表格和文本树会在输出时排版。':'已解析为下方可编辑正文。'}${notes.length ? ' '+notes.join(' ') : ''}`;
+    mdInfo.textContent = `${imported.filename} · ${imported.summary.characters} 字符。${importLayout==='assignment'?'已保留作业 Markdown，表格和文本树会在输出时排版。':'已解析为下方可编辑正文。'}${notes.length ? ' '+notes.join(' ') : ''}`;
     mdInfo.hidden = false;
+    editorChanged();
     notice('文档已导入。检查下方正文与转换提示后，点击“生成试写”。');
-  } catch (error) { notice(error.message, true); }
-  finally { mdInput.disabled = false; mdInput.value = ''; }
+  } catch (error) { mdInfo.hidden=true;notice(error.message, true); }
+  finally { mdInput.disabled=false;mdInput.value='';state.importing=false;$('#generate-button').disabled=['queued','running'].includes(state.job?.status); }
 });
 
 let setupWatch = null;

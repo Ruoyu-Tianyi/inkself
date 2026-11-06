@@ -1,9 +1,9 @@
 import hashlib,json,string,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
-from PIL import Image,ImageDraw
+from PIL import Image,ImageDraw,ImageOps
 from fastapi.testclient import TestClient
-from web.runtime.assignment import parse_assignment,preflight_assignment,render_assignment,compose_assignment
+from web.runtime.assignment import Writer,parse_assignment,preflight_assignment,render_assignment,compose_assignment
 from web.runtime.reference_renderer import load_bank
 from web.runtime.word_spacing import fit_word_spacing
 
@@ -38,6 +38,71 @@ class Assignment(unittest.TestCase):
             bank=bank_fixture(Path(temporary))
             with self.assertRaises(ValueError):preflight_assignment('## 1\na. p* > 0.',bank,False)
             preflight_assignment('## 1\na. p* > 0.',bank,True)
+
+    def test_missing_glyph_hint_only_suggests_supplements_when_available(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bank=bank_fixture(Path(temporary))
+            del bank['glyphs']['×']
+            with self.assertRaisesRegex(ValueError,'可启用配套'):
+                preflight_assignment('12×34',bank,False)
+            preflight_assignment('12×34',bank,True)
+            for allow in (False,True):
+                with self.subTest(allow=allow),self.assertRaises(ValueError) as caught:
+                    preflight_assignment(r'Cost \$12.',bank,allow)
+                self.assertIn('均缺少',str(caught.exception))
+                self.assertIn('USD 12',str(caught.exception))
+                self.assertNotIn('启用',str(caught.exception))
+
+    def test_prose_only_structural_shapes_are_not_promised_inside_math(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bank=bank_fixture(Path(temporary))
+            preflight_assignment('p*',bank,True)
+            with self.assertRaisesRegex(ValueError,'均缺少.*\\*'):
+                preflight_assignment('$p*$',bank,True)
+
+    def test_supplemental_symbol_attached_to_personal_digits_renders(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);bank=bank_fixture(root/'bank')
+            del bank['glyphs']['×']
+            source='## 1\n12×34 = 408.'
+            preflight_assignment(source,bank,True)
+            output=root/'output';output.mkdir()
+            meta=render_assignment({'text':source,'seed':42,'allow_supplemental_math':True},
+                                   bank,None,fit_word_spacing(),output)
+            self.assertIn('×',meta['supplemental_math_glyphs'])
+            self.assertTrue(meta['references'])
+            self.assertEqual(compose_assignment(output,{'preferences':{'ink':'#263d57'}},
+                {'assignment_layout':meta,'model':{'name':'Synthetic'}}),1)
+            self.assertTrue((output/'result.pdf').is_file())
+
+    def test_display_formula_keeps_its_own_centered_line(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bank=bank_fixture(Path(temporary))
+            for delimiter in ('$$x=2$$',r'\[x=2\]'):
+                with self.subTest(delimiter=delimiter):
+                    writer=Writer(bank,None,fit_word_spacing(),42,True)
+                    writer.paragraph('before '+delimiter+' after',width=1000)
+                    self.assertEqual(len(writer.baseline_lines),3)
+                    writer=Writer(bank,None,fit_word_spacing(),42,True)
+                    image=writer.paragraph(delimiter,width=400)
+                    bounds=ImageOps.invert(image).getbbox()
+                    self.assertLessEqual(abs((bounds[0]+bounds[2])/2-200),2)
+            writer=Writer(bank,None,fit_word_spacing(),42,True)
+            writer.paragraph('before $x=2$ after',width=1000)
+            self.assertEqual(len(writer.baseline_lines),1)
+
+    def test_literal_currency_stays_literal_in_math_aware_assignment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);bank=bank_fixture(root/'bank');output=root/'output';output.mkdir()
+            bank['glyphs']['$']=dict(bank['glyphs']['S'])
+            # Dollar pairs must not hide automatic subscripts between them.
+            source=r'Cost \$12 and EMV_A = 34; total \$56.'
+            document=preflight_assignment(source,bank,True)
+            self.assertIn(r'\$12',document['blocks'][0]['text'])
+            meta=render_assignment({'text':source,'seed':42,'allow_supplemental_math':True},
+                                   bank,None,fit_word_spacing(),output)
+            self.assertNotIn('$',meta['supplemental_math_glyphs'])
+            self.assertEqual(len(meta['entries']),1)
 
     def test_end_to_end_repeatable_and_table_headers_repeat_after_wrap(self):
         with tempfile.TemporaryDirectory() as temporary:

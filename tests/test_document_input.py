@@ -17,6 +17,14 @@ class DocumentInput(unittest.TestCase):
         _,missing=prepare_document(r'$\alpha_i=1$',self.bank,True,True)
         self.assertEqual(missing,['α'])
 
+    def test_unavailable_math_glyph_does_not_offer_unhelpful_supplement_toggle(self):
+        for allow in (False,True):
+            with self.subTest(allow=allow),self.assertRaises(ValueError) as caught:
+                prepare_document(r'$\$$',self.bank,True,allow)
+            self.assertIn('均缺少',str(caught.exception))
+            self.assertIn('USD 12',str(caught.exception))
+            self.assertNotIn('启用',str(caught.exception))
+
     def test_unrecognized_commands_and_empty_formula_fail_preflight(self):
         for text in ('$$  $$',r'$\input{secret}$',r'$\unknown{x}$','$x_{1$'):
             with self.subTest(text=text),self.assertRaises(ValueError):prepare_document(text,self.bank,True,True)

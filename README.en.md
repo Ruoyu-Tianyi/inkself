@@ -6,7 +6,7 @@ Inkself is a **personal handwriting desktop application for Windows and macOS**.
 
 ## Download the desktop preview
 
-Download the [0.4.0-rc.1 desktop preview](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.4.0-rc.1), or browse all versions on [GitHub Releases](https://github.com/Ruoyu-Tianyi/inkself/releases):
+Download the [0.5.0-rc.1 desktop preview](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1), or browse all versions on [GitHub Releases](https://github.com/Ruoyu-Tianyi/inkself/releases). See the [0.5.0 release notes](docs/release-0.5.0.md) for the changes.
 
 - **Windows x64:** run `Inkself-Windows-x64-Setup.exe`, then open Inkself.
 - **Mac Apple Silicon:** download `Inkself-macOS-arm64.dmg`.
@@ -14,19 +14,20 @@ Download the [0.4.0-rc.1 desktop preview](https://github.com/Ruoyu-Tianyi/inksel
 
 On Mac, drag the app to Applications before opening it. Installers include the local CPU AI runtime; no separate Python installation or API key is required. Model files are downloaded separately during initial setup. Personal data is stored in your user directory, outside the application bundle.
 
-The Windows installer is unsigned. Mac apps are ad-hoc signed, without an Apple Developer ID signature or notarization. Your operating system may block the first launch. Verify the official release and SHA-256 checksums, and read the [Mac installation guide](docs/macos-guide.md) or [Windows desktop guide](docs/desktop-guide.md), currently in Chinese. Do not disable system-wide security protections.
+The Windows installer is unsigned. Mac apps are ad-hoc signed, without an Apple Developer ID signature or notarization. Your operating system may block the first launch. Verify the official release and SHA-256 checksums, and read the [Mac installation guide](docs/macos-guide.md) or the [Windows desktop guide](docs/desktop-guide.md) in Chinese. Do not disable system-wide security protections.
 
 ## Current capabilities
 
 - English and digit samples, with optional mathematical symbols and Greek letters; PNG/JPEG/WebP upload, line segmentation, and line-type review.
 - Multiple handwriting profiles, cached personal styles, and preferences for size, line spacing, and ink color.
-- **New in the current source:** Natural, Neat, Compact, and Relaxed spacing presets plus custom adjustments for letters, words, lines, paragraphs, digits, symbols, word baseline movement, and spacing variation. Settings are saved with profiles and generated documents. The published `0.4.0-rc.1` installers do not include this feature; see the instructions and mode limitations below.
+- Natural, Neat, Compact, and Relaxed spacing buttons plus custom adjustments for letters, words, lines, paragraphs, digits, symbols, word baseline movement, and spacing variation. Settings are saved with profiles and generated documents. The `0.5.0-rc.1` installers include these controls.
+- Text and settings are automatically saved as a local draft across restarts. Completing a generation preserves edits made while waiting. Opening history asks before replacing an unsent draft. Temporary connection failures support automatic reconnection and a manual status retry.
 - Real offline CPU inference using a pinned VATr++ pretrained generator, including words, sentences, and digits absent from the sample.
 - Source-image comparison, A4 previews, PDF export, document history, and human feedback.
 - Line-based pagination for long documents, keeping question numbers, formulas, and explanations together where possible and reducing paragraph widows and orphans. The habit and reference modes accept up to 20,000 characters.
 - Word gaps measured between visible strokes, with stored sample gap distributions and reproducible natural variation. Conservative estimates are identified when sample evidence is insufficient.
 - Inline and display mathematics, superscripts and subscripts, fractions, roots, nested brackets, sums, integrals, and Greek letters. Brackets and roots use sample-informed stroke width and slant with slight variation. Missing mathematical glyphs require explicit permission to use supplemental handwriting glyphs.
-- Markdown import: local parsing of headings, paragraphs, lists, emphasis, and formulas, with an editable preview, preserved source text, and conversion notices.
+- Markdown import: local parsing of headings, paragraphs, lists, emphasis, and formulas, with an editable preview, preserved source text, and conversion notices. If text or settings change while a file is being read, the import result does not overwrite those edits.
 - Assignment output: numbered questions, choice columns, tables, text decision trees, common subscript notation, question-aware pagination, and repeated table headers. Optional first-page identification requires a reviewed personal glyph profile.
 - A per-user Windows installer, Mac apps for both architectures, and a separate local CPU AI runtime. Initial setup downloads and verifies a pinned model; users do not need to configure Python or an API key, and personal data is stored separately.
 - Reusable batch comparisons with fixed test texts, input snapshots, model/code fingerprints, HTML comparison pages, and file-by-file reproduction checks.
@@ -36,7 +37,7 @@ The Windows installer is unsigned. Mac apps are ad-hoc signed, without an Apple 
 
 Generation and layout operate word by word, rather than producing continuous paragraph-level strokes. Habit adaptation still uses raster stroke skeletons from the source; it is not an end-to-end stroke trajectory generator, and arbitrary unannotated short samples cannot yet be cloned automatically. The default model does not substitute a generic font or require collecting every character individually. A separate, manually reviewed reference mode reuses observed words, fragments, and letters; it cannot infer unseen characters or joins.
 
-## Spacing and writing rhythm (current source)
+## Spacing and writing rhythm
 
 On the writing screen, choose a preset by clicking Natural (自然), Neat (工整), Compact (紧凑), or Relaxed (宽松) under “间距与书写节奏” (Spacing and writing rhythm). To adjust one setting, expand the individual controls and move its slider. The style changes to Custom. Click “生成试写” (Generate) to see the result in either a standard document or an assignment. Click Natural to restore the default spacing.
 
@@ -66,7 +67,9 @@ After installing the full desktop app for your system:
 3. Enter new content or import Markdown, generate a trial, and compare it with the source character by character.
 4. Export the PDF and record content accuracy, handwriting similarity, and naturalness.
 
-The Windows build targets compatible Windows 10/11 x64 systems; separate Mac builds support Apple Silicon and Intel. Native window startup and PDF export have been checked for all three release packages. First-time installation, model setup, and personal handwriting quality still need human validation. Bundling resolves environment setup requirements; it does not establish high-fidelity cloning from arbitrary short samples. Initial downloading needs internet access but does not send your samples or documents. Markdown containing structured formulas still requires a reviewed personal glyph profile. See the [Windows desktop guide](docs/desktop-guide.md), [Mac installation guide](docs/macos-guide.md), [Markdown import guide](docs/markdown-import.md), and [AI workflow](docs/ai-workflow.md), currently in Chinese.
+The Windows build targets compatible Windows 10/11 x64 systems; separate Mac builds support Apple Silicon and Intel. Native-window and PDF-export validation records for the packages are listed on the [release page](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1). First-time installation, model setup, and personal handwriting quality still need human validation. Bundling resolves environment setup requirements; it does not establish high-fidelity cloning from arbitrary short samples. Initial downloading needs internet access but does not send your samples or documents. Markdown containing structured formulas still requires a reviewed personal glyph profile. See the [Mac installation guide](docs/macos-guide.md), or the Chinese [Windows desktop guide](docs/desktop-guide.md), [Markdown import guide](docs/markdown-import.md), and [AI workflow](docs/ai-workflow.md).
+
+After editing, wait for “草稿已保存在本机” (draft saved locally). If saving fails, keep the window open and retry. The draft is stored in `compose-draft.json` inside the application's data directory, including its text and layout settings; include it when backing up that directory. Assignment-mode `$$...$$` formulas keep their own centered lines, and supplemental symbols attached to numbers can be combined correctly. Write currency dollar signs as `\$`; the profile must still contain a `$` glyph. Use `USD 12.50` when that glyph is unavailable.
 
 ### Run from source (developers)
 
@@ -90,9 +93,9 @@ A basic portable package can still be built with `python scripts/build_desktop.p
 
 | Area | Status |
 | --- | --- |
-| Local automated tests | Current source on Windows: 262 tests, 261 passed and one real-symlink test skipped because of Windows permissions; 5 UI state tests also passed. Spacing presets, a four-page document, a three-page answer sheet, and repeatable exports with fixed settings were checked. See GitHub Actions for native checks of the published Mac builds. |
+| Local automated tests | 278 Python checks: 277 passed and one real-symlink test skipped because of Windows permissions; 17 UI state tests also passed. Coverage includes spacing presets, draft persistence and recovery, edit protection, retrying failed jobs, and assignment math layout. Long-document and answer-sheet reproducibility checks with fixed settings passed. |
 | Real model inference | Both the source environment and the separate InkselfAI.exe have generated outputs, checking cache reuse, complete results, and job logs. This does not establish handwriting similarity. |
-| Application flow | Sample import, confirmation, generation, preview, and PDF export have been exercised. Windows and both Mac architectures passed native-window and synthetic-sample export checks; see [release validation](https://github.com/Ruoyu-Tianyi/inkself/actions/runs/40683998555). |
+| Application flow | Sample import, confirmation, generation, preview, and PDF export have been exercised. See the [release notes](https://github.com/Ruoyu-Tianyi/inkself/releases/tag/v0.5.0-rc.1) for this version's native checks on each platform. |
 | Personal similarity and generalization to other writers | **Validation is ongoing; no passing conclusion yet.** |
 | Comprehensive content accuracy | **Not fully validated. Habit mode includes digit/symbol regression checks, but the default model can still write incorrect content.** |
 | Independent OCR and automatic correction | Not integrated. Outputs require human review by default. |
@@ -106,7 +109,7 @@ Current support covers uppercase and lowercase English, digits, and some punctua
 # Run inside the project's Python environment
 python -m unittest discover -s tests -v
 node --check web/static/app.js
-node --test tests/test_spacing_ui.cjs
+node --test tests/test_spacing_ui.cjs tests/test_workflow_ui.cjs
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8765
 ```
 

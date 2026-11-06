@@ -2,6 +2,12 @@
 from .math_syntax import document_tokens, required_glyphs
 
 
+def unsupported_glyph_message(characters):
+    message='当前字迹和配套字形均缺少这些字符：'+''.join(sorted(characters))+'。请补采对应字形，或改写为已支持的文字。'
+    if '$' in characters:message+='美元金额可写为 USD 12。'
+    return message
+
+
 def prepare_document(text, bank, math_enabled=False, allow_supplemental=False):
     from .math_glyphs import SUPPORTED_GLYPHS
     tokens=document_tokens(text,math_enabled)
@@ -14,7 +20,7 @@ def prepare_document(text, bank, math_enabled=False, allow_supplemental=False):
             missing=required-set(bank['glyphs'])
             unsupported=missing-set(SUPPORTED_GLYPHS)
             if unsupported:
-                raise ValueError('Unsupported mathematical characters: '+''.join(sorted(unsupported)))
+                raise ValueError(unsupported_glyph_message(unsupported))
             if missing and not allow_supplemental:
                 raise ValueError('原稿未采集这些数学字形：'+''.join(sorted(missing))+'。可启用配套手写字形，或补采样后再生成。')
             supplements.update(missing)

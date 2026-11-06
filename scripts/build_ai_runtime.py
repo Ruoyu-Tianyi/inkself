@@ -21,6 +21,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.build_desktop import license_file, normal_name, ordinary_path, sha256, write_json
+from web.version import VERSION
 
 RUNTIME_DISTRIBUTIONS = (
     'torch', 'torchvision', 'numpy', 'Pillow', 'opencv-python-headless',
@@ -139,9 +140,10 @@ def copy_runtime_licenses(bundle, distributions, python_license=None):
 
 def create_manifest(bundle, inventory):
     sources = [ROOT / 'ai_worker.py', ROOT / 'packaging/InkselfAI.spec', Path(__file__).resolve(),
-               ROOT / 'scripts/build_desktop.py', *sorted((ROOT / 'web/runtime').glob('*.py'))]
+               ROOT / 'scripts/build_desktop.py', *sorted((ROOT / 'web').glob('*.py')),
+               *sorted((ROOT / 'web/runtime').glob('*.py'))]
     write_json(bundle / 'build-manifest.json', {
-        'schema_version': 1, 'application': 'InkselfAI', 'kind': 'cpu-neural-runtime',
+        'schema_version': 1, 'application': 'InkselfAI', 'version': VERSION, 'kind': 'cpu-neural-runtime',
         'platform': 'Windows', 'architecture': platform.machine(), 'python': platform.python_version(),
         'includes_model_assets': False,
         'dependencies': [{'name': item['name'], 'version': item['version']} for item in inventory],

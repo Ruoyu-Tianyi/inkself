@@ -16,14 +16,17 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from web.version import VERSION, NUMERIC_VERSION
 TEMPLATE = ROOT / 'packaging/InkselfInstaller.iss'
 INSTALLED_MODE = ROOT / 'packaging/installed-mode.json'
 MODEL_MANIFEST = ROOT / 'web/model-assets.json'
-APP_VERSION = '0.4.0'
+APP_VERSION = VERSION
 PRIVATE_DIRECTORIES = {'.local', 'data', 'config', 'logs', 'log', 'models',
                        'profiles', 'samples', 'outputs', 'experiments', '.git', '.venv'}
 PRIVATE_FILENAMES = {'desktop-config.json', 'desktop-session.json', 'window-loaded.json',
@@ -31,7 +34,8 @@ PRIVATE_FILENAMES = {'desktop-config.json', 'desktop-session.json', 'window-load
 COMMON_FILES = {'build-manifest.json', 'SHA256SUMS.txt', 'THIRD_PARTY_NOTICES.txt',
                 'LICENSE', 'LICENSE.txt', 'NOTICE.txt', 'COMMERCIAL-LICENSE.md'}
 APP_FILES = COMMON_FILES | {'Inkself.exe', '使用说明.md', 'math-and-documents.md',
-                           'experiment-workflow.md', 'habit-adapter.md', 'markdown-import.md', 'ai-workflow.md'}
+                           'experiment-workflow.md', 'habit-adapter.md', 'markdown-import.md', 'ai-workflow.md',
+                           'spacing-controls.md'}
 AI_FILES = COMMON_FILES | {'InkselfAI.exe'}
 MODEL_DESTINATION = r'{localappdata}\Inkself\data\models\vatrpp'
 MODEL_REPO = 'blowing-up-groundhogs/vatrpp'
@@ -128,6 +132,8 @@ def verified_bundle(bundle, *, ai=False):
     manifest = _json(root / 'build-manifest.json')
     if manifest.get('application') != ('InkselfAI' if ai else 'Inkself'):
         raise ValueError('Release build manifest does not identify the expected application.')
+    if manifest.get('version') != APP_VERSION:
+        raise ValueError('Release bundle version must match installer version ' + APP_VERSION + '; rebuild this component.')
     if ai and manifest.get('includes_model_assets') is not False:
         raise ValueError('AI runtime must explicitly exclude model assets.')
     expected = {}
@@ -274,7 +280,8 @@ def build_installer(app, *, compiler, output, ai_runtime=None, model=None):
         allowlist = scratch / 'payload-files.iss'
         allowlist.write_text(files_include(records), encoding='utf-8-sig')
         command = [str(compiler), '/Qp', '/DFileListPath=' + str(allowlist), '/DBuildOutput=' + str(scratch),
-                   '/DSetupBaseName=' + base, '/DAppVersion=' + APP_VERSION, str(TEMPLATE)]
+                   '/DSetupBaseName=' + base, '/DAppVersion=' + APP_VERSION,
+                   '/DAppBuildVersion=' + NUMERIC_VERSION, str(TEMPLATE)]
         if model is not None:
             command.insert(-1, '/DOfflineModel=1')
         subprocess.run(command, cwd=ROOT, stdin=subprocess.DEVNULL, check=True)

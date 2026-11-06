@@ -17,6 +17,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from scripts.build_ai_runtime import copy_runtime_licenses,dependency_inventory
 from scripts.build_desktop import copy_offline_guides
+from web.version import VERSION, NUMERIC_VERSION
 
 
 def sha(path):
@@ -74,6 +75,11 @@ def main():
     command.extend(['--add-data',str(ROOT/'web/static')+':web/static',str(ROOT/'desktop.py')])
     subprocess.run(command,cwd=ROOT,check=True)
     app=output/'Inkself.app';resources=app/'Contents/Resources'
+    import plistlib
+    info_path=app/'Contents/Info.plist'
+    info=plistlib.loads(info_path.read_bytes())
+    info.update(CFBundleShortVersionString=NUMERIC_VERSION, CFBundleVersion=NUMERIC_VERSION)
+    info_path.write_bytes(plistlib.dumps(info))
     shutil.copytree(ai,resources/'ai-runtime',symlinks=True)
     # Include complete dependency notices without relicensing third-party code.
     distributions={d.metadata['Name'].lower().replace('_','-'):d for d in metadata.distributions() if d.metadata.get('Name')}
@@ -83,7 +89,7 @@ def main():
     copy_offline_guides(resources)
     shutil.copyfile(ROOT/'docs/macos-guide.md',resources/'macOS-guide.md')
     validate_bundle(app)
-    manifest={'application':'Inkself','version':'0.4.0','platform':'macOS','architecture':platform.machine(),
+    manifest={'application':'Inkself','version':VERSION,'platform':'macOS','architecture':platform.machine(),
         'signing':'ad-hoc; not Apple Developer ID signed or notarized','includes_model_weights':False,
         'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
         'source_sha256':{str(p.relative_to(ROOT)):sha(p) for p in sorted((ROOT/'web').rglob('*.py'))}}

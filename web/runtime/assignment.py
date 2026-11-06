@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image,ImageDraw,ImageOps
 
-VERSION='assignment-layout-2'
+VERSION='assignment-layout-3'
 PAGE_W,PAGE_H,MARGIN=1240,1754,80
 WIDTH=PAGE_W-2*MARGIN
 
@@ -18,7 +18,11 @@ def _plain(text):
     from web.markdown_document import parse_markdown
     if not text.strip():return ''
     text=re.sub(r'\*\*([^*]+)\*\*',r'\1',text)
-    text=parse_markdown(text,'answer.md')['text']
+    parsed=parse_markdown(text,'answer.md')
+    text=parsed['text']
+    # Assignment paragraphs always pass through the math-aware tokenizer, even
+    # when this individual Markdown block contains only literal currency.
+    if not parsed['math_enabled']:text=text.replace('$',r'\$')
     text=text.replace('¥','CNY ').replace('−','-').replace('–','-').replace('—','-').replace('⇒',' so ')
     text=re.sub(r'^\s*\(([a-z])\)\s*',r'\1. ',text)
     return text
@@ -92,7 +96,7 @@ def parse_assignment(source):
 def _inline(text):
     # Plain A_S / EMV_test,gross notation becomes a real subscript. Explicit
     # LaTeX regions are left untouched.
-    parts=re.split(r'(\$\$.*?\$\$|\$[^$]*\$|\\\(.*?\\\)|\\\[.*?\\\])',text,flags=re.S)
+    parts=re.split(r'((?<!\\)\$\$.*?(?<!\\)\$\$|(?<!\\)\$(?:\\.|[^$\\])*\$|\\\(.*?\\\)|\\\[.*?\\\])',text,flags=re.S)
     for i in range(0,len(parts),2):
         parts[i]=re.sub(r'\b([A-Za-z]+)_([A-Za-z0-9]+(?:,[A-Za-z]+)?)',
             lambda m:'$\\mathrm{'+m[1]+'}_{\\mathrm{'+m[2]+'}}$',parts[i])
@@ -100,11 +104,10 @@ def _inline(text):
 
 
 def preflight_assignment(source,bank,allow_supplemental=False,header=''):
-    from .document_input import prepare_document
+    from .document_input import unsupported_glyph_message
     from .math_glyphs import SUPPORTED_GLYPHS
     document=parse_assignment(source)
     allowed=set(bank['glyphs'])|set(' \n\t')
-    if allow_supplemental:allowed|=set(SUPPORTED_GLYPHS)|{'*','□','○'}
     texts=[header] if header else []
     for b in document['blocks']:
         if 'text' in b:texts.append(b['text'])
@@ -118,7 +121,12 @@ def preflight_assignment(source,bank,allow_supplemental=False,header=''):
         for token in document_tokens(_inline(text),True):
             required=required_glyphs(token['math']) if 'math' in token else set(token.get('text',''))
             missing=required-allowed
-            if missing:raise ValueError('当前字迹不支持：'+''.join(sorted(missing))+'。可启用配套数学字形。')
+            supplemental=set(SUPPORTED_GLYPHS)
+            if 'math' not in token:supplemental|={'*','□','○'}
+            unsupported=missing-supplemental
+            if unsupported:raise ValueError(unsupported_glyph_message(unsupported))
+            if missing and not allow_supplemental:
+                raise ValueError('原稿未采集这些字形：'+''.join(sorted(missing))+'。可启用配套手写数学字形，或补采对应字形。')
     return document
 
 
@@ -138,8 +146,14 @@ class Writer:
         if all(c in self.bank['glyphs'] for c in text):
             im,meta=habit_token(self.bank,self.habit,text,self.seed,self.counter,spacing=self.settings) if self.habit else reference_token(self.bank,text,spacing=self.settings,seed=self.seed,occurrence=self.counter)
             self.references.update(meta.get('references',[]));return im,meta['baseline'],meta.get('em_height',32)
-        pieces=[]
-        for part in re.findall(r'[A-Za-z0-9+%=.,;?:×÷-]+|.',text):
+        pieces=[];parts=[];personal=[]
+        for char in text:
+            if char in self.bank['glyphs']:personal.append(char)
+            else:
+                if personal:parts.append(''.join(personal));personal=[]
+                parts.append(char)
+        if personal:parts.append(''.join(personal))
+        for part in parts:
             if all(c in self.bank['glyphs'] for c in part):im,base,em=self.native(part)
             elif part in ('*','□','○') and self.allow:
                 im=Image.new('L',(40,96),255);d=ImageDraw.Draw(im)
@@ -178,7 +192,7 @@ class Writer:
             im=im.crop((max(0,bounds[0]-1),0,min(im.width,bounds[2]+1),im.height))
             f=em/original_em
             im=im.resize((max(1,round(im.width*f)),max(1,round(im.height*f))),Image.Resampling.LANCZOS)
-            result.append((im,round(base*f),token['space_before'],token.get('text','')));self.counter+=1
+            result.append((im,round(base*f),token['space_before'],token.get('text',''),token.get('display_math',False)));self.counter+=1
         return result
 
     def paragraph(self,text,em=39,width=WIDTH):
@@ -190,17 +204,25 @@ class Writer:
             text=re.sub(r';\s+(?=[A-Za-z]+_[A-Za-z])',';\n',text)
         tokens=self.tokens(text,em);gaps=sample_word_gaps(self.spacing,len(tokens),self.seed,self.counter)
         lines=[];pending=[];used=0
-        def finish_line():
+        def finish_line(display=False):
             from .baseline_rhythm import word_offsets
-            offsets=word_offsets([p[0].width for p in pending],[p[2] for p in pending],em,self.seed,len(self.baseline_lines),strength=self.settings['baseline']) if self.habit or self.explicit_spacing else [0]*len(pending)
+            offsets=word_offsets([p[0].width for p in pending],[p[2] for p in pending],em,self.seed,len(self.baseline_lines),strength=self.settings['baseline']) if (self.habit or self.explicit_spacing) and not display else [0]*len(pending)
             self.baseline_lines.append({'em':em,'offsets_px':offsets})
-            lines.append(self.join(pending,offsets))
+            image,baseline=self.join(pending,offsets)
+            if display:
+                centered=Image.new('L',(width,image.height),255)
+                centered.paste(image,((width-image.width)//2,0));image=centered
+            lines.append((image,baseline))
         for index,token in enumerate(tokens):
             if token is None:
                 if pending:finish_line();pending=[];used=0
                 continue
-            im,base,space,label=token
+            im,base,space,label,display=token
             if im.width>width:raise ValueError('连续公式或单词过宽，请在运算符前后加空格或拆行。')
+            if display:
+                if pending:finish_line()
+                pending=[(im,base,0)];finish_line(display=True);pending=[];used=0
+                continue
             gap=max(1,round(.08*em),round(adjust_gap(gaps[index]*em,self.spacing['mean']*em,self.settings,'word'))) if pending and space else 0
             previous_label=tokens[index-1][3] if index and tokens[index-1] else ''
             if gap and (standalone_symbol(label) or standalone_symbol(previous_label)):

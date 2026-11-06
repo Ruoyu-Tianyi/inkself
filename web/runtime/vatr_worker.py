@@ -7,7 +7,7 @@ import hashlib,importlib.util,json,os,re,sys,time,types
 from pathlib import Path
 from unittest.mock import patch
 
-RENDERER_VERSION='inkself-runtime-7'
+RENDERER_VERSION='inkself-runtime-8'
 
 
 def _sha256(path):
